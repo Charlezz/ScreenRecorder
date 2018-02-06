@@ -37,14 +37,10 @@ import java.util.concurrent.atomic.AtomicBoolean
 /**
  * @author Yrom
  */
-class ScreenRecorder
-/**
- * @param dpi for [VirtualDisplay]
- */
-(video: VideoEncodeConfig,
- audio: AudioEncodeConfig?,
- private val mDpi: Int, private var mMediaProjection: MediaProjection?,
- val savedPath: String) {
+class ScreenRecorder(video: VideoEncodeConfig,
+					 audio: AudioEncodeConfig?,
+					 private val mDpi: Int, private var mMediaProjection: MediaProjection?,
+					 val savedPath: String) {
 	private val mWidth: Int
 	private val mHeight: Int
 	private var mVideoEncoder: VideoEncoder? = null

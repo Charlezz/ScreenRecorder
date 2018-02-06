@@ -26,6 +26,8 @@ class MainActivity : AppCompatActivity() {
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
+		MyScreenRecorder.Builder(this).build()
+
 		setContentView(R.layout.activity_main)
 		record.setOnCheckedChangeListener { buttonView, isChecked ->
 			if (isChecked) {
