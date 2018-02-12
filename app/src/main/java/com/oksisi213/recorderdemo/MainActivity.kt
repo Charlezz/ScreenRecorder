@@ -1,10 +1,15 @@
 package com.oksisi213.recorderdemo
 
+import android.Manifest
+import android.app.Activity
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Bundle
+import android.support.v4.app.ActivityCompat
+import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.util.Size
@@ -13,29 +18,35 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.TextView
-import com.oksisi213.screenrecorder.*
+import com.oksisi213.screenrecorder.AudioProfile
+import com.oksisi213.screenrecorder.CodecUtil
+import com.oksisi213.screenrecorder.ScreenRecorder
+import com.oksisi213.screenrecorder.VideoProfile
 import kotlinx.android.synthetic.main.activity_main.*
 
 
 class MainActivity : AppCompatActivity() {
+
+
 	companion object {
 		val TAG = MainActivity::class.java.simpleName
 	}
 
 	val spinnerItemId = android.R.layout.simple_list_item_1
+	var PERMISSION_CODE_WRITE = 0
+	val PERMISSION_LIST = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
-		MyScreenRecorder.Builder(this).build()
-
 		setContentView(R.layout.activity_main)
-		record.setOnCheckedChangeListener { buttonView, isChecked ->
-			if (isChecked) {
-				ScreenRecorderManager.instance.requestVirtualDisplay(this, 0)
-			} else {
-				sendBroadcast(Intent(ScreenRecorderActivity.ACTION_STOP))
-			}
+
+		if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+
+		} else {
+			ActivityCompat.requestPermissions(this, PERMISSION_LIST, PERMISSION_CODE_WRITE)
 		}
+
+
 
 		videoMimeTypeSpinner.adapter = ArrayAdapter<String>(this, spinnerItemId, ArrayList<String>().apply {
 			add(MediaFormat.MIMETYPE_VIDEO_AVC)
@@ -91,7 +102,53 @@ class MainActivity : AppCompatActivity() {
 			add(CodecUtil.AudioChannel.MONO)
 		})
 
+		record.setOnCheckedChangeListener { _, isChecked ->
+			if (isChecked) {
+				ScreenRecorder.requestCaptureIntent(this, 0)
+			} else {
+				recorder?.stop()
+			}
+		}
+	}
 
+	override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
+		super.onRequestPermissionsResult(requestCode, permissions, grantResults)
+		when (requestCode) {
+			PERMISSION_CODE_WRITE -> {
+				grantResults.forEach {
+					if (it == PackageManager.PERMISSION_GRANTED) {
+						Log.e(TAG, "All Permissions have been granted")
+					} else {
+						finish()
+					}
+				}
+			}
+		}
+
+	}
+
+	var recorder: ScreenRecorder? = null
+	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+		super.onActivityResult(requestCode, resultCode, data)
+		if (requestCode == 0) {
+			if (resultCode == Activity.RESULT_OK) {
+				recorder = ScreenRecorder(this, data!!)
+						.setVideoMimeType(videoMimeTypeSpinner.selectedItem as String)
+						.setResolution((resolutionSpinner.selectedItem as Size).width, (resolutionSpinner.selectedItem as Size).height)
+						.setFrameRate(frameRateSpinner.selectedItem as Int)
+						.setIFrameInterval(iFrameIntervalSpinner.selectedItem as Int)
+						.setVideoBitrate(videoBitrateSpinner.selectedItem as Int)
+						.setVideoCodec(videoEncoderSpinner.selectedItem as MediaCodecInfo)
+						.setVideoProfile((videoProfileSpinner.selectedItem as VideoProfile).profile)
+						.setVideoLevel((videoProfileSpinner.selectedItem as VideoProfile).level)
+						.createRecorder()
+
+
+			} else {
+				record.isChecked = false
+			}
+
+		}
 	}
 
 	private fun initVideoCodecs() {
@@ -104,6 +161,8 @@ class MainActivity : AppCompatActivity() {
 				initVideoBitrates()
 			}
 		}
+
+
 	}
 
 	private fun initVideoBitrates() {
@@ -116,7 +175,7 @@ class MainActivity : AppCompatActivity() {
 
 	private fun initVideoProfiles() {
 		(videoEncoderSpinner.selectedItem as MediaCodecInfo).let {
-			avcProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, ArrayList<VideoProfile>().apply {
+			videoProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, ArrayList<VideoProfile>().apply {
 				try {
 
 					it.supportedTypes.forEach { s: String? ->
@@ -184,14 +243,6 @@ class MainActivity : AppCompatActivity() {
 			audioBitrateSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, it)
 		}
 
-	}
-
-
-	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
-		super.onActivityResult(requestCode, resultCode, data)
-		if (requestCode == 0) {
-			ScreenRecorderManager.instance.startRecording(this, resultCode, data!!)
-		}
 	}
 
 

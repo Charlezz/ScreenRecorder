@@ -1,4 +1,4 @@
-package com.oksisi213.screenrecorder
+package com.oksisi213.recorderdemo
 
 import android.view.View
 import android.widget.AdapterView

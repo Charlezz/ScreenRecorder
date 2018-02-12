@@ -140,13 +140,13 @@
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 android:text="Profile"
-                app:layout_constraintBottom_toBottomOf="@id/avcProfileSpinner"
+                app:layout_constraintBottom_toBottomOf="@id/videoProfileSpinner"
                 app:layout_constraintLeft_toLeftOf="@id/tv_video_mime_type"
                 app:layout_constraintRight_toRightOf="@id/tv_video_mime_type"
-                app:layout_constraintTop_toTopOf="@id/avcProfileSpinner" />
+                app:layout_constraintTop_toTopOf="@id/videoProfileSpinner" />
 
             <Spinner
-                android:id="@+id/avcProfileSpinner"
+                android:id="@+id/videoProfileSpinner"
                 android:layout_width="0dp"
                 android:layout_height="wrap_content"
                 app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
@@ -169,7 +169,7 @@
                 android:layout_height="wrap_content"
                 app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
                 app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
-                app:layout_constraintTop_toBottomOf="@id/avcProfileSpinner" />
+                app:layout_constraintTop_toBottomOf="@id/videoProfileSpinner" />
 
 
             <TextView
@@ -295,10 +295,11 @@
                 android:id="@+id/record"
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginTop="50dp"
                 android:text="record"
-                app:layout_constraintBottom_toBottomOf="parent"
                 app:layout_constraintLeft_toLeftOf="parent"
-                app:layout_constraintRight_toRightOf="parent" />
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/audioProfileSpinner" />
         </android.support.constraint.ConstraintLayout>
     </ScrollView>
 
