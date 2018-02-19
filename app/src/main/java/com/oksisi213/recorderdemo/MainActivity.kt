@@ -40,9 +40,7 @@ class MainActivity : AppCompatActivity() {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.activity_main)
 
-		if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-
-		} else {
+		if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
 			ActivityCompat.requestPermissions(this, PERMISSION_LIST, PERMISSION_CODE_WRITE)
 		}
 
@@ -141,7 +139,16 @@ class MainActivity : AppCompatActivity() {
 						.setVideoCodec(videoEncoderSpinner.selectedItem as MediaCodecInfo)
 						.setVideoProfile((videoProfileSpinner.selectedItem as VideoProfile).profile)
 						.setVideoLevel((videoProfileSpinner.selectedItem as VideoProfile).level)
+						.setMicRecording(true)
+						.setAudioMimeType(audioMimeTypeSpinner.selectedItem as String)
+						.setAudioCodec(audioCodecSpinner.selectedItem as MediaCodecInfo)
+						.setAudioProfile((audioProfileSpinner.selectedItem as AudioProfile).profile)
+						.setAudioSampleRate(sampleRateSpinner.selectedItem as Int)
+						.setAudioBitrate(audioBitrateSpinner.selectedItem as Int)
+						.setAudioChannel(CodecUtil.AudioChannel.STEREO)
 						.createRecorder()
+
+				recorder?.start()
 
 
 			} else {
@@ -242,7 +249,6 @@ class MainActivity : AppCompatActivity() {
 		).let {
 			audioBitrateSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, it)
 		}
-
 	}
 
 
