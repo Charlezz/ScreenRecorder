@@ -9,7 +9,6 @@ import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
-import android.support.v4.content.ContextCompat
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
 import android.util.Size
@@ -18,10 +17,7 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.TextView
-import com.oksisi213.screenrecorder.AudioProfile
-import com.oksisi213.screenrecorder.CodecUtil
-import com.oksisi213.screenrecorder.ScreenRecorder
-import com.oksisi213.screenrecorder.VideoProfile
+import com.oksisi213.screenrecorder.*
 import kotlinx.android.synthetic.main.activity_main.*
 
 
@@ -34,16 +30,21 @@ class MainActivity : AppCompatActivity() {
 
 	val spinnerItemId = android.R.layout.simple_list_item_1
 	var PERMISSION_CODE_WRITE = 0
-	val PERMISSION_LIST = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE)
+	val PERMISSION_LIST = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO)
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.activity_main)
 
-		if (ContextCompat.checkSelfPermission(this, Manifest.permission.WRITE_EXTERNAL_STORAGE) != PackageManager.PERMISSION_GRANTED) {
-			ActivityCompat.requestPermissions(this, PERMISSION_LIST, PERMISSION_CODE_WRITE)
-		}
 
+
+		PERMISSION_LIST.forEach {
+			Log.e(TAG, "onCreate: $it")
+			if (ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED) {
+				ActivityCompat.requestPermissions(this, PERMISSION_LIST, PERMISSION_CODE_WRITE)
+			}
+			return@forEach
+		}
 
 
 		videoMimeTypeSpinner.adapter = ArrayAdapter<String>(this, spinnerItemId, ArrayList<String>().apply {
@@ -115,7 +116,7 @@ class MainActivity : AppCompatActivity() {
 			PERMISSION_CODE_WRITE -> {
 				grantResults.forEach {
 					if (it == PackageManager.PERMISSION_GRANTED) {
-						Log.e(TAG, "All Permissions have been granted")
+						Log.e(TAG, "${PERMISSION_LIST[it]} : Permissions have been granted")
 					} else {
 						finish()
 					}
@@ -130,31 +131,38 @@ class MainActivity : AppCompatActivity() {
 		super.onActivityResult(requestCode, resultCode, data)
 		if (requestCode == 0) {
 			if (resultCode == Activity.RESULT_OK) {
-				recorder = ScreenRecorder(this, data!!)
-						.setVideoMimeType(videoMimeTypeSpinner.selectedItem as String)
-						.setResolution((resolutionSpinner.selectedItem as Size).width, (resolutionSpinner.selectedItem as Size).height)
-						.setFrameRate(frameRateSpinner.selectedItem as Int)
-						.setIFrameInterval(iFrameIntervalSpinner.selectedItem as Int)
-						.setVideoBitrate(videoBitrateSpinner.selectedItem as Int)
-						.setVideoCodec(videoEncoderSpinner.selectedItem as MediaCodecInfo)
-						.setVideoProfile((videoProfileSpinner.selectedItem as VideoProfile).profile)
-						.setVideoLevel((videoProfileSpinner.selectedItem as VideoProfile).level)
-						.setMicRecording(true)
-						.setAudioMimeType(audioMimeTypeSpinner.selectedItem as String)
-						.setAudioCodec(audioCodecSpinner.selectedItem as MediaCodecInfo)
-						.setAudioProfile((audioProfileSpinner.selectedItem as AudioProfile).profile)
-						.setAudioSampleRate(sampleRateSpinner.selectedItem as Int)
-						.setAudioBitrate(audioBitrateSpinner.selectedItem as Int)
-						.setAudioChannel(CodecUtil.AudioChannel.STEREO)
-						.createRecorder()
+//				recorder = ScreenRecorder(this, data!!)
+//						.setVideoConfig(VideoConfig())
+//						.setAudioConfig()
+//						.record()
+//						.setVideoMimeType(videoMimeTypeSpinner.selectedItem as String)
+//						.setResolution((resolutionSpinner.selectedItem as Size).width, (resolutionSpinner.selectedItem as Size).height)
+//						.setFrameRate(frameRateSpinner.selectedItem as Int)
+//						.setIFrameInterval(iFrameIntervalSpinner.selectedItem as Int)
+//						.setVideoBitrate(videoBitrateSpinner.selectedItem as Int)
+//						.setVideoCodec(videoEncoderSpinner.selectedItem as MediaCodecInfo)
+//						.setVideoProfile((videoProfileSpinner.selectedItem as VideoProfile).profile)
+//						.setVideoLevel((videoProfileSpinner.selectedItem as VideoProfile).level)
+//						.setMicRecording(true)
+//						.setAudioMimeType(audioMimeTypeSpinner.selectedItem as String)
+//						.setAudioCodec(audioCodecSpinner.selectedItem as MediaCodecInfo)
+//						.setAudioProfile((audioProfileSpinner.selectedItem as AudioProfile).profile)
+//						.setAudioSampleRate(sampleRateSpinner.selectedItem as Int)
+//						.setAudioBitrate(audioBitrateSpinner.selectedItem as Int)
+//						.setAudioChannel(CodecUtil.AudioChannel.STEREO)
+//						.record()
 
-				recorder?.start()
+				data?.let {
+					ScreenRecorder2(this, it)
+							.setVideoConfig(VideoConfig.getDefaultConfig())
+							.setAudioConfig(AudioConfig.getDefaultConfig())
+							.record()
+				}
 
 
 			} else {
 				record.isChecked = false
 			}
-
 		}
 	}
 
@@ -184,10 +192,6 @@ class MainActivity : AppCompatActivity() {
 		(videoEncoderSpinner.selectedItem as MediaCodecInfo).let {
 			videoProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, ArrayList<VideoProfile>().apply {
 				try {
-
-					it.supportedTypes.forEach { s: String? ->
-						Log.e(TAG, "supportTypes:$s")
-					}
 					it.getCapabilitiesForType(videoMimeTypeSpinner.selectedItem as String).profileLevels.forEach {
 						val name = "${CodecUtil.getAVCProfileName(it.profile)} / ${CodecUtil.getAVCProfileLevel(it.level)}"
 						add(VideoProfile(name, it.profile, it.level))
