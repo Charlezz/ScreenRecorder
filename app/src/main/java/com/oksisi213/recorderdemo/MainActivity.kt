@@ -126,7 +126,7 @@ class MainActivity : AppCompatActivity() {
 
 	}
 
-	var recorder: ScreenRecorder? = null
+	var recorder: ScreenRecorder2? = null
 	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
 		super.onActivityResult(requestCode, resultCode, data)
 		if (requestCode == 0) {
@@ -153,7 +153,7 @@ class MainActivity : AppCompatActivity() {
 //						.record()
 
 				data?.let {
-					ScreenRecorder2(this, it)
+					recorder = ScreenRecorder2(this, it)
 							.setVideoConfig(VideoConfig.getDefaultConfig())
 							.setAudioConfig(AudioConfig.getDefaultConfig())
 							.record()

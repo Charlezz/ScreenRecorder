@@ -10,7 +10,10 @@ import android.media.projection.MediaProjectionManager
 import android.os.Environment
 import android.os.HandlerThread
 import android.os.Message
+import android.os.SystemClock
 import android.util.Log
+import android.util.SparseLongArray
+import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 
@@ -55,46 +58,55 @@ class ScreenRecorder2 constructor(context: Context, data: Intent) : Recorder2<Sc
 	}
 
 	private val MSG_START = 0
+	private val MSG_STOP = 1
 	private val mediaProjectionManager: MediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 	private val mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, data)
+	private var micRecord: AudioRecord? = null
+	private var audioOutputFormat: MediaFormat? = null
+	private var minBytes = 0
+	private var audioTrackIndex = -1
+	private var videoEncoder: MediaCodec? = null
+	private var audioEncoder: MediaCodec? = null
+
 
 	val worker = HandlerThread("worker").apply {
 		start()
 	}
 	val handler = WeakRefHandler(worker.looper, this)
+	var timeStamp = 0L
 
 	override fun handleMessage(message: Message) {
 		when (message.what) {
 			MSG_START -> {
-				val videoCodec: MediaCodec? = videoConfig?.createMediaCodec()
-				videoCodec?.configure(videoConfig?.mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-				videoCodec?.setCallback(object : MediaCodec.Callback() {
+				videoEncoder = videoConfig.createMediaCodec()
+				videoEncoder?.configure(videoConfig.mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+				videoEncoder?.setCallback(object : MediaCodec.Callback() {
 					override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
-						Log.e(TAG, "onOutputBufferAvailable")
+						Log.e(TAG, "video onOutputBufferAvailable")
 						codec?.releaseOutputBuffer(index, false)
 					}
 
 					override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
-						Log.e(TAG, "onInputBufferAvailable")
+						Log.e(TAG, "video onInputBufferAvailable")
 					}
 
 					override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
-						Log.e(TAG, "onOutputFormatChanged")
+						Log.e(TAG, "video onOutputFormatChanged")
 					}
 
 					override fun onError(codec: MediaCodec?, e: MediaCodec.CodecException?) {
-						Log.e(TAG, "onError")
+						Log.e(TAG, "video onError")
 					}
 
 				})
 
 				mediaProjection?.createVirtualDisplay(
 						TAG,
-						videoConfig?.width!!,
-						videoConfig?.height!!,
+						videoConfig.width,
+						videoConfig.height,
 						1,
 						DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
-						videoCodec?.createInputSurface(),
+						videoEncoder?.createInputSurface(),
 						object : VirtualDisplay.Callback() {
 							override fun onResumed() {
 								super.onResumed()
@@ -113,25 +125,43 @@ class ScreenRecorder2 constructor(context: Context, data: Intent) : Recorder2<Sc
 						},
 						null
 				)
-				videoCodec?.start()
+				videoEncoder?.start()
 
 
 				///audio
-
-				val audioCodec: MediaCodec? = audioConfig.createMediaCodec()
+				audioEncoder = audioConfig.createMediaCodec()
 				Log.e(TAG, audioConfig.toString())
-				audioCodec?.configure(audioConfig.mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-				audioCodec?.setCallback(object : MediaCodec.Callback() {
+				audioEncoder?.configure(audioConfig.mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+				audioEncoder?.setCallback(object : MediaCodec.Callback() {
 					override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
-						Log.e(TAG, "audio onOutputBufferAvailable")
+						Log.w(TAG, "audio onOutputBufferAvailable ${info!!.presentationTimeUs}")
+
+						muxer.writeSampleData(audioTrackIndex, codec?.getOutputBuffer(index), info)
+						codec?.releaseOutputBuffer(index, false)
 					}
 
 					override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
-						Log.e(TAG, "audio onInputBufferAvailable")
+						Log.w(TAG, "audio onInputBufferAvailable")
+						val inputBuffer = codec?.getInputBuffer(index)
+
+						Log.e(TAG, "minBytes:${minBytes}")
+						Log.e(TAG, "inputBuffer!!.limit():${inputBuffer!!.limit()}")
+						val bufferCount = micRecord?.read(inputBuffer, inputBuffer!!.limit())
+						Log.e(TAG, "bufferCount:$bufferCount")
+						codec?.queueInputBuffer(
+								index,
+								inputBuffer!!.position(),
+								inputBuffer!!.limit(),
+								calculateFrameTimestamp(bufferCount!! shl 3),
+								MediaCodec.BUFFER_FLAG_KEY_FRAME)
 					}
 
 					override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
+						audioOutputFormat = format
+						minBytes = AudioRecord.getMinBufferSize(44100, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
 						Log.e(TAG, "audio onOutputFormatChanged")
+						audioTrackIndex = muxer.addTrack(audioOutputFormat)
+						muxer.start()
 					}
 
 					override fun onError(codec: MediaCodec?, e: MediaCodec.CodecException?) {
@@ -146,25 +176,68 @@ class ScreenRecorder2 constructor(context: Context, data: Intent) : Recorder2<Sc
 					return
 				}
 
-				var micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
+				micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
 						audioConfig.sampleRate,
-						AudioFormat.CHANNEL_IN_STEREO,
+						AudioFormat.CHANNEL_IN_MONO,
 						AudioFormat.ENCODING_PCM_16BIT,
-						minBytes * 2)
+						minBytes * 1)
 
-				if (micRecord.state == AudioRecord.STATE_UNINITIALIZED) {
+				if (micRecord?.state == AudioRecord.STATE_UNINITIALIZED) {
 					Log.e(TAG, "bad arguments")
 				}
-//				micRecord.startRecording()
-				audioCodec?.start()
+				micRecord?.startRecording()
+				audioEncoder?.start()
 
-
+			}
+			MSG_STOP -> {
+				videoEncoder?.stop()
+				audioEncoder?.stop()
+				val eos = MediaCodec.BufferInfo()
+				val buffer = ByteBuffer.allocate(0)
+				eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+				muxer.writeSampleData(audioTrackIndex, buffer, eos)
+				muxer.stop()
+				muxer.release()
 			}
 		}
 	}
 
-	fun record() {
+	fun record(): ScreenRecorder2 {
 		handler.sendEmptyMessage(MSG_START)
+		return this
+	}
+
+	fun stop() {
+		handler.sendEmptyMessage(MSG_STOP)
+	}
+
+	private val LAST_FRAME_ID = -1
+	private val mFramesUsCache = SparseLongArray(2)
+	private fun calculateFrameTimestamp(totalBits: Int): Long {
+		val samples = totalBits shr 4
+		var frameUs = mFramesUsCache.get(samples, -1)
+		if (frameUs == -1L) {
+			frameUs = (samples * 1000000 / 44100).toLong()
+			mFramesUsCache.put(samples, frameUs)
+		}
+		var timeUs = SystemClock.elapsedRealtimeNanos() / 1000
+		// accounts the delay of polling the audio sample data
+		timeUs -= frameUs
+		var currentUs: Long
+		val lastFrameUs = mFramesUsCache.get(LAST_FRAME_ID, -1)
+		if (lastFrameUs == -1L) { // it's the first frame
+			currentUs = timeUs
+		} else {
+			currentUs = lastFrameUs
+		}
+		Log.i(TAG, "count samples pts: $currentUs, time pts: $timeUs, samples: $samples")
+		// maybe too late to acquire sample data
+		if (timeUs - currentUs >= frameUs shl 1) {
+			// reset
+			currentUs = timeUs
+		}
+		mFramesUsCache.put(LAST_FRAME_ID, currentUs + frameUs)
+		return currentUs
 	}
 
 }

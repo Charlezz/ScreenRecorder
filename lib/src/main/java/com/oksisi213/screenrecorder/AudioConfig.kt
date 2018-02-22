@@ -3,6 +3,7 @@ package com.oksisi213.screenrecorder
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.text.TextUtils
+import android.util.Log
 import java.io.IOException
 import java.util.*
 
@@ -18,13 +19,9 @@ class AudioConfig {
 		fun getDefaultConfig() = AudioConfig(
 				codecName = CodecUtil.findAudioEncoderList(MediaFormat.MIMETYPE_AUDIO_AAC)[0].name,
 				mimeType = MediaFormat.MIMETYPE_AUDIO_AAC,
-				bitrate = 128000,
-				sampleRate = 44000,
-				channelCount = 2,
-				profile = CodecUtil.findVideoEncoderList(MediaFormat.MIMETYPE_AUDIO_AAC)[0]
-						.getCapabilitiesForType(MediaFormat.MIMETYPE_AUDIO_AAC)
-						.profileLevels[0]
-						.profile
+				bitrate = 80000,
+				sampleRate = 44100,
+				channelCount = 1
 		)
 	}
 
@@ -33,7 +30,6 @@ class AudioConfig {
 	val bitrate: Int get
 	val sampleRate: Int get
 	val channelCount: Int get
-	val profile: Int get
 
 	val mediaFormat: MediaFormat get
 
@@ -42,15 +38,13 @@ class AudioConfig {
 			mimeType: String,
 			bitrate: Int,
 			sampleRate: Int,
-			channelCount: Int,
-			profile: Int
+			channelCount: Int
 	) {
 		this.codecName = codecName
 		this.mimeType = Objects.requireNonNull(mimeType)
 		this.bitrate = bitrate
 		this.sampleRate = sampleRate
 		this.channelCount = channelCount
-		this.profile = profile
 
 		this.mediaFormat = createMediaFormat()
 	}
@@ -63,13 +57,12 @@ class AudioConfig {
 				", bitRate=" + bitrate +
 				", sampleRate=" + sampleRate +
 				", channelCount=" + channelCount +
-				", profile=" + profile +
 				'}'.toString()
 	}
 
 	fun createMediaFormat(): MediaFormat =
 			MediaFormat.createAudioFormat(mimeType, sampleRate, channelCount).apply {
-				setInteger(MediaFormat.KEY_AAC_PROFILE, profile)
+				//				setInteger(MediaFormat.KEY_AAC_PROFILE, profile)
 				setInteger(MediaFormat.KEY_BIT_RATE, bitrate)
 			}
 
@@ -78,6 +71,7 @@ class AudioConfig {
 				if (!TextUtils.isEmpty(codecName)) {
 					MediaCodec.createByCodecName(codecName)
 				} else {
+					Log.e(TAG, "No codec name, will create encorder by type")
 					throw IOException("No codec name, will create encorder by type")
 				}
 			} catch (e: IOException) {
