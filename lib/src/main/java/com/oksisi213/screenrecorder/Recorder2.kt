@@ -17,6 +17,7 @@ import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 
+
 /**
  * Copyright 2017 Maxst, Inc. All Rights Reserved.
  * Created by charles on 2018. 2. 21..
@@ -135,6 +136,10 @@ class ScreenRecorder2 constructor(context: Context, data: Intent) : Recorder2<Sc
 				audioEncoder?.setCallback(object : MediaCodec.Callback() {
 					override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
 						Log.w(TAG, "audio onOutputBufferAvailable ${info!!.presentationTimeUs}")
+
+						if (info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG !== 0) {
+							info.size = 0
+						}
 
 						muxer.writeSampleData(audioTrackIndex, codec?.getOutputBuffer(index), info)
 						codec?.releaseOutputBuffer(index, false)
