@@ -1,5 +1,3 @@
-@file:Suppress("UNCHECKED_CAST")
-
 package com.oksisi213.screenrecorder
 
 import android.app.Activity
@@ -8,7 +6,6 @@ import android.content.Intent
 import android.hardware.display.DisplayManager
 import android.hardware.display.VirtualDisplay
 import android.media.*
-import android.media.projection.MediaProjection
 import android.media.projection.MediaProjectionManager
 import android.os.Environment
 import android.os.HandlerThread
@@ -16,55 +13,16 @@ import android.os.Message
 import android.os.SystemClock
 import android.util.Log
 import android.util.SparseLongArray
-import java.io.IOException
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
 
+
 /**
  * Copyright 2017 Maxst, Inc. All Rights Reserved.
- * Created by charles on 2018. 2. 5..
+ * Created by charles on 2018. 2. 21..
  */
-
-open abstract class Recorder<out T> : WeakRefHandler.IMessageListener {
-
-	//video
-	protected var width = CodecUtil.Resolution.HD.width
-	protected var height = CodecUtil.Resolution.HD.height
-	protected var orientation = CodecUtil.Orientation.PORTRAIT
-	protected var videoBitrate = CodecUtil.VideoBitrate.HD
-	protected var frameRate = CodecUtil.FrameRate.FAST
-	protected var iFrameInterval = 1
-	protected var videoMimeType: String = MediaFormat.MIMETYPE_VIDEO_AVC
-	protected var videoCodecName: String? = null
-	protected var videoCodecProfileLevel: MediaCodecInfo.CodecProfileLevel? = null
-	protected var videoProfile: Int = 0
-	protected var videoLevel: Int = 0
-	protected var videoCodec: MediaCodec? = null
-	protected var mediaProjection: MediaProjection? = null
-	protected var videoTrackIndex: Int = -1
-	protected var videoOutputFormat: MediaFormat? = null
-
-	//audio
-	protected var isMicRecording: Boolean = false
-	protected var audioMimeType: String = MediaFormat.MIMETYPE_AUDIO_AAC
-	protected var audioCodecName: String? = null
-	protected var audioCodec: MediaCodec? = null
-	protected var audioProfile: Int = 0
-	protected var sampleRate: Int = 0
-	protected var audioBitrate: Int = 0
-	protected var audioChannelCount: Int = CodecUtil.AudioChannel.STEREO
-	protected var audioTrackIndex: Int = -1
-	protected var audioOutputFormat: MediaFormat? = null
-
-	protected var micRecord: AudioRecord? = null
-	protected var minBytes: Int = 0
-
-	protected var workerThread: HandlerThread? = null
-	protected var handler: WeakRefHandler? = null
-
-	protected var muxerStart: Boolean = false
-
+open abstract class Recorder<out T> {
 
 	private val dstPath by lazy {
 		val dateFormat = SimpleDateFormat("yyMMdd_HHmmss")
@@ -75,100 +33,23 @@ open abstract class Recorder<out T> : WeakRefHandler.IMessageListener {
 		MediaMuxer(dstPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 	}
 
+	protected var videoConfig: VideoConfig? = null
+	protected var audioConfig: AudioConfig? = null
 
-	fun setResolution(width: Int, height: Int): T {
-		this.width = width
-		this.height = height
+	fun setVideoConfig(config: VideoConfig): T {
+		this.videoConfig = config
 		return this as T
 	}
 
-	fun setVideoBitrate(bitrate: Int): T {
-		this.videoBitrate = bitrate
+	fun setAudioConfig(config: AudioConfig): T {
+		this.audioConfig = config
 		return this as T
 	}
-
-	fun setFrameRate(frameRate: Int): T {
-		this.frameRate = frameRate
-		return this as T
-	}
-
-	fun setIFrameInterval(iFrameInterval: Int): T {
-		this.iFrameInterval = iFrameInterval
-		return this as T
-	}
-
-	fun setVideoMimeType(mimeType: String): T {
-		this.videoMimeType = mimeType
-		return this as T
-	}
-
-	fun setVideoCodec(videoCodecInfo: MediaCodecInfo): T {
-		this.videoCodecName = videoCodecInfo.name
-//		videoCodecInfo.getCapabilitiesForType(videoMimeType)
-		return this as T
-	}
-
-	fun setVideoProfile(profile: Int): T {
-		this.videoProfile = profile
-		return this as T
-	}
-
-	fun setVideoLevel(level: Int): T {
-		this.videoLevel = level
-		return this as T
-	}
-
-	/////////
-	fun setMicRecording(enabled: Boolean): T {
-		isMicRecording = enabled
-		return this as T
-
-	}
-
-	fun setAudioMimeType(mimeType: String): T {
-		audioMimeType = mimeType
-		return this as T
-	}
-
-	fun setAudioCodec(audioCodecInfo: MediaCodecInfo): T {
-		this.audioCodecName = audioCodecInfo.name
-//		audioCodecInfo.getCapabilitiesForType(audioMimeType)
-		return this as T
-	}
-
-	fun setAudioProfile(audioProfile: Int): T {
-		this.audioProfile = audioProfile
-		return this as T
-	}
-
-	fun setAudioSampleRate(sampleRate: Int): T {
-		this.sampleRate = sampleRate
-		return this as T
-	}
-
-	fun setAudioBitrate(bitrate: Int): T {
-		audioBitrate = bitrate
-		return this as T
-	}
-
-	fun setAudioChannel(count: Int): T {
-		audioChannelCount = count
-		return this as T
-	}
-
 }
 
-//class DefaultRecorderFatory private constructor(context: Context) : Recorder<DefaultRecorderFatory>() {
-//	override fun record(): DefaultRecorderFatory {
-//		return this
-//	}
-//
-//}
 
-class ScreenRecorder private constructor() : Recorder<ScreenRecorder>() {
-
-
-	val TAG = Recorder::class.java.simpleName
+class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<ScreenRecorder>(), WeakRefHandler.IMessageListener {
+	val TAG = ScreenRecorder::class.java.simpleName
 
 	companion object {
 		fun requestCaptureIntent(activity: Activity, requestCode: Int) {
@@ -177,51 +58,298 @@ class ScreenRecorder private constructor() : Recorder<ScreenRecorder>() {
 		}
 	}
 
-	private var context: Context? = null
-	private lateinit var data: Intent
+	private val MSG_START = 0
+	private val MSG_STOP = 1
+	private val INVALID_INDEX = -1
 
-	var virtualDisplayName = TAG
+	private val mediaProjectionManager: MediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
+	private val mediaProjection = mediaProjectionManager.getMediaProjection(Activity.RESULT_OK, data)
+	private var micRecord: AudioRecord? = null
+	private var audioOutputFormat: MediaFormat? = null
+	private var videoOutputFormat: MediaFormat? = null
+	private var minBytes = 0
+	private var audioTrackIndex = INVALID_INDEX
+	private var videoTrackIndex = INVALID_INDEX
 
-	var dpi: Int = 1
-	var flag = DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC
-	var virtualDisplay: VirtualDisplay? = null
+	private var videoEncoder: MediaCodec? = null
+	private var audioEncoder: MediaCodec? = null
+	private var isMuxerStart = false
 
-	constructor(context: Context, data: Intent) : this() {
-		this.context = context
-		this.data = data
+	private var pendingVideoBuffer = LinkedList<Pair<Int, MediaCodec.BufferInfo>>()
+	private var pendingAudioBuffer = LinkedList<Pair<Int, MediaCodec.BufferInfo>>()
+
+	init {
+		audioConfig = AudioConfig.getDefaultConfig()
+		videoConfig = VideoConfig.getDefaultConfig()
 	}
 
+
+	val worker = HandlerThread("worker").apply {
+		start()
+	}
+	val handler = WeakRefHandler(worker.looper, this)
+	var timeStamp = 0L
+
+
+	override fun handleMessage(message: Message) {
+		when (message.what) {
+			MSG_START -> {
+				videoEncoder = videoConfig?.createMediaCodec()
+				videoEncoder?.configure(videoConfig?.mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+				videoEncoder?.setCallback(object : MediaCodec.Callback() {
+					override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
+						Log.i(TAG, "video onOutputBufferAvailable")
+						info?.let {
+							muxVideo(index, info)
+						}
+					}
+
+					override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
+						Log.e(TAG, "video onInputBufferAvailable")
+					}
+
+					override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
+						Log.e(TAG, "video onOutputFormatChanged")
+						videoOutputFormat = format
+						startMuxerIfReady()
+					}
+
+					override fun onError(codec: MediaCodec?, e: MediaCodec.CodecException?) {
+						Log.e(TAG, "video onError")
+					}
+				})
+
+				mediaProjection?.createVirtualDisplay(
+						TAG,
+						videoConfig!!.width,
+						videoConfig!!.height,
+						1,
+						DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
+						videoEncoder?.createInputSurface(),
+						object : VirtualDisplay.Callback() {
+							override fun onResumed() {
+								super.onResumed()
+								Log.e(TAG, "virtual display onResumed")
+							}
+
+							override fun onPaused() {
+								super.onPaused()
+								Log.e(TAG, "virtual display onPaused")
+							}
+
+							override fun onStopped() {
+								super.onStopped()
+								Log.e(TAG, "virtual display onStopped")
+							}
+						},
+						null
+				)
+				videoEncoder?.start()
+
+
+				///audio
+				minBytes = AudioRecord.getMinBufferSize(
+						audioConfig!!.sampleRate,
+						if (audioConfig!!.channelCount == 1) {
+							AudioFormat.CHANNEL_IN_MONO
+						} else {
+							AudioFormat.CHANNEL_IN_STEREO
+						},
+						AudioFormat.ENCODING_PCM_16BIT
+				)
+				Log.e(TAG, "minBytes:${minBytes}")
+
+				audioEncoder = audioConfig?.createMediaCodec()
+				Log.e(TAG, audioConfig.toString())
+				audioEncoder?.configure(audioConfig?.mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
+				audioEncoder?.setCallback(object : MediaCodec.Callback() {
+					override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
+						info?.let {
+							muxAudio(index, it)
+						}
+					}
+
+					override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
+						val inputBuffer = codec?.getInputBuffer(index)
+						val bufferCount = micRecord?.read(inputBuffer, inputBuffer!!.limit())
+						codec?.queueInputBuffer(
+								index,
+								inputBuffer!!.position(),
+								inputBuffer.limit(),
+								calculateFrameTimestamp(bufferCount!! shl 3),
+								MediaCodec.BUFFER_FLAG_KEY_FRAME)
+					}
+
+					override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
+						Log.e(TAG, "audio onOutputFormatChanged")
+						audioOutputFormat = format
+						startMuxerIfReady()
+					}
+
+					override fun onError(codec: MediaCodec?, e: MediaCodec.CodecException?) {
+						Log.e(TAG, "audio onError")
+					}
+				})
+
+				var minBytes = AudioRecord.getMinBufferSize(audioConfig!!.sampleRate, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
+				if (minBytes <= 0) {
+					Log.e(TAG, String.format(Locale.US, "Bad arguments: getMinBufferSize(%d, %d, %d)",
+							audioConfig!!.sampleRate, audioConfig!!.channelCount, AudioFormat.ENCODING_PCM_16BIT))
+					return
+				}
+
+				micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
+						audioConfig!!.sampleRate,
+						AudioFormat.CHANNEL_IN_MONO,
+						AudioFormat.ENCODING_PCM_16BIT,
+						minBytes * 1)
+				micRecord?.
+
+
+				if (micRecord == null) {
+					throw NullPointerException("MicRecorder is null")
+				}
+
+				if (micRecord?.state == AudioRecord.STATE_UNINITIALIZED) {
+					Log.e(TAG, "bad arguments")
+				}
+
+				micRecord?.startRecording()
+				audioEncoder?.start()
+
+			}
+			MSG_STOP -> {
+				Log.e(TAG, "stop")
+				videoEncoder?.stop()
+				videoEncoder?.release()
+
+				audioEncoder?.stop()
+				audioEncoder?.release()
+
+				micRecord?.stop()
+				micRecord?.release()
+
+				val eos = MediaCodec.BufferInfo()
+				val buffer = ByteBuffer.allocate(0)
+				eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+
+				muxer.writeSampleData(audioTrackIndex, buffer, eos)
+				muxer.writeSampleData(videoTrackIndex, buffer, eos)
+
+				audioTrackIndex = INVALID_INDEX
+				videoTrackIndex = INVALID_INDEX
+
+				videoPtsOffset = 0
+				audioPtsOffset = 0
+
+
+				muxer.stop()
+				muxer.release()
+			}
+		}
+	}
+
+	fun startMuxerIfReady() {
+		Log.e(TAG, "startMuxerIfReady")
+		if ((videoConfig != null && videoOutputFormat == null) ||
+				(audioConfig != null && audioOutputFormat == null)) {
+			Log.e(TAG, "see you soon")
+			return
+		}
+
+		videoTrackIndex = muxer.addTrack(videoOutputFormat)
+		Log.e(TAG, "videoTrackIndex=$videoTrackIndex")
+		audioTrackIndex = muxer.addTrack(audioOutputFormat)
+		Log.e(TAG, "audioTrackIndex=$audioTrackIndex")
+		isMuxerStart = true
+		muxer.start()
+
+		while (pendingAudioBuffer.isEmpty() && pendingVideoBuffer.isEmpty()) {
+			Log.e(TAG, "no pending data")
+			return
+		}
+
+		var pendingBuffer: Pair<Int, MediaCodec.BufferInfo>? = null
+
+		while ({ pendingBuffer = pendingVideoBuffer.poll(); pendingBuffer }() != null) {
+			pendingBuffer?.let {
+				muxVideo(it.first, it.second)
+			}
+		}
+
+		pendingBuffer = null
+
+		while ({ pendingBuffer = pendingAudioBuffer.poll(); pendingBuffer }() != null) {
+			pendingBuffer?.let {
+				muxAudio(it.first, it.second)
+			}
+		}
+	}
+
+	private fun muxAudio(index: Int, bufferInfo: MediaCodec.BufferInfo) {
+		Log.i(TAG, "mux audio:${bufferInfo.presentationTimeUs}")
+
+		if (audioTrackIndex == INVALID_INDEX || !isMuxerStart) {
+			Log.e(TAG, "audio Track is not ready yet")
+			pendingAudioBuffer.push(Pair(index, bufferInfo))
+			return
+		}
+
+		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
+			Log.e(TAG, "muxAudio:BUFFER_FLAG_CODEC_CONFIG")
+			bufferInfo.size = 0
+		} else {
+			resetAudioPts(bufferInfo)
+			Log.e(TAG, "audio pts:${bufferInfo.presentationTimeUs}")
+		}
+
+
+		muxer.writeSampleData(audioTrackIndex, audioEncoder?.getOutputBuffer(index), bufferInfo)
+		audioEncoder?.releaseOutputBuffer(index, false)
+		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+			Log.e(TAG, "Stop Audio encoder and muxer, since the buffer has been marked with EOS")
+			audioTrackIndex = INVALID_INDEX
+//			mVideoTrackIndex = INVALID_INDEX
+//			signalStop(true)
+		}
+	}
+
+	private fun muxVideo(index: Int, bufferInfo: MediaCodec.BufferInfo) {
+		Log.i(TAG, "mux video:${bufferInfo.presentationTimeUs}")
+
+		if (videoTrackIndex == INVALID_INDEX || !isMuxerStart) {
+			Log.e(TAG, "video Track is not ready yet")
+			pendingVideoBuffer.push(Pair(index, bufferInfo))
+			return
+		}
+
+
+		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
+			Log.e(TAG, "muxAudio:BUFFER_FLAG_CODEC_CONFIG")
+			bufferInfo.size = 0
+		} else {
+			resetVideoPts(bufferInfo)
+			Log.e(TAG, "video pts:${bufferInfo.presentationTimeUs}")
+		}
+
+		muxer.writeSampleData(videoTrackIndex, videoEncoder?.getOutputBuffer(index), bufferInfo)
+		videoEncoder?.releaseOutputBuffer(index, false)
+
+		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
+			Log.e(TAG, "Stop Video encoder and muxer, since the buffer has been marked with EOS")
+			videoTrackIndex = INVALID_INDEX
+//			mVideoTrackIndex = INVALID_INDEX
+//			signalStop(true)
+		}
+	}
 
 	fun record(): ScreenRecorder {
-
-		workerThread = HandlerThread("Test", Thread.MAX_PRIORITY)
-		workerThread?.start()
-		handler = WeakRefHandler(workerThread!!.looper, this)
-		handler?.sendEmptyMessage(0)
+		handler.sendEmptyMessage(MSG_START)
 		return this
-
-
 	}
 
-
 	fun stop() {
-		Log.e(TAG, "stop")
-		videoCodec?.stop()
-		audioCodec?.stop()
-
-		var eosBuffer = MediaCodec.BufferInfo()
-		eosBuffer.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-		Log.e(TAG, "videoTrackIndex = $videoTrackIndex audioTrackIndex=$audioTrackIndex")
-		muxer.writeSampleData(videoTrackIndex, ByteBuffer.allocate(0), eosBuffer)
-		muxer.writeSampleData(audioTrackIndex, ByteBuffer.allocate(0), eosBuffer)
-
-		virtualDisplay?.release()
-		videoCodec?.setCallback(null)
-		videoCodec?.release()
-		mediaProjection?.stop()
-
-		muxer.stop()
-		muxer.release()
+		handler.sendEmptyMessage(MSG_STOP)
 	}
 
 	private val LAST_FRAME_ID = -1
@@ -230,7 +358,7 @@ class ScreenRecorder private constructor() : Recorder<ScreenRecorder>() {
 		val samples = totalBits shr 4
 		var frameUs = mFramesUsCache.get(samples, -1)
 		if (frameUs == -1L) {
-			frameUs = (samples * 1000000 / sampleRate).toLong()
+			frameUs = (samples * 1000000 / 44100).toLong()
 			mFramesUsCache.put(samples, frameUs)
 		}
 		var timeUs = SystemClock.elapsedRealtimeNanos() / 1000
@@ -253,137 +381,25 @@ class ScreenRecorder private constructor() : Recorder<ScreenRecorder>() {
 		return currentUs
 	}
 
-	override fun handleMessage(message: Message) {
-		when (message.what) {
-			0 -> {
-				var videoMediaFormat = MediaFormat.createVideoFormat(videoMimeType, width, height)
-				videoMediaFormat.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatSurface)
-				videoMediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, videoBitrate)
-				videoMediaFormat.setInteger(MediaFormat.KEY_FRAME_RATE, frameRate)
-				videoMediaFormat.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, iFrameInterval)
+	private var videoPtsOffset: Long = 0
+	private var audioPtsOffset: Long = 0
 
+	private fun resetAudioPts(buffer: MediaCodec.BufferInfo) {
+		if (audioPtsOffset == 0L) {
+			audioPtsOffset = buffer.presentationTimeUs
+			buffer.presentationTimeUs = 0
+		} else {
+			buffer.presentationTimeUs -= audioPtsOffset
+		}
+	}
 
-				if (videoProfile != 0 && videoLevel != 0) {
-					videoMediaFormat.setInteger(MediaFormat.KEY_PROFILE, videoProfile)
-//			videoMediaFormat.setInteger(MediaFormat.KEY_LEVEL, videoLevel)
-					videoMediaFormat.setInteger("level", videoLevel)
-				}
-
-				videoMediaFormat.getString(MediaFormat.KEY_MIME)
-				try {
-					videoCodec = MediaCodec.createByCodecName(videoCodecName)
-				} catch (e: IOException) {
-					e.printStackTrace()
-				}
-
-				videoCodec?.setCallback(object : MediaCodec.Callback() {
-					override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo) {
-						Log.e(TAG, "onOutputBufferAvailable: ")
-						var buffer: ByteBuffer? = codec?.getOutputBuffer(index)
-						if ((info.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG) != 0) {
-							Log.e(TAG, "BUFFER_FLAG_CODEC_CONFIG")
-						}
-						if ((info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
-							Log.e(TAG, "BUFFER_FLAG_END_OF_STREAM")
-						}
-//						muxer.writeSampleData(0, buffer, info)
-						codec?.releaseOutputBuffer(index, false)
-					}
-
-					override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
-						Log.e(TAG, "onInputBufferAvailable: ")
-					}
-
-					override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
-						Log.e(TAG, "onOutputFormatChanged: video")
-						videoTrackIndex = muxer.addTrack(format)
-
-
-						muxer.start()
-					}
-
-					override fun onError(codec: MediaCodec?, e: MediaCodec.CodecException?) {
-						Log.e(TAG, "onError: ")
-					}
-				})
-				videoCodec?.configure(videoMediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-				val manager = context?.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
-				mediaProjection = manager.getMediaProjection(Activity.RESULT_OK, data)
-				virtualDisplay = mediaProjection?.createVirtualDisplay(
-						virtualDisplayName,
-						width,
-						height,
-						dpi,
-						flag,
-						videoCodec?.createInputSurface(),
-						null,
-						null
-				)
-				videoCodec?.start()
-
-//				var audioMediaFormat = MediaFormat.createAudioFormat(audioMimeType, sampleRate, audioChannelCount)
-//				audioMediaFormat.setInteger(MediaFormat.KEY_AAC_PROFILE, audioProfile)
-//				audioMediaFormat.setInteger(MediaFormat.KEY_BIT_RATE, audioBitrate)
-//
-//				audioCodec = MediaCodec.createByCodecName(audioCodecName)
-//
-//				audioCodec?.setCallback(object : MediaCodec.Callback() {
-//					override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
-//						val buffer = codec?.getOutputBuffer(index)
-//						muxer.writeSampleData(audioTrackIndex, buffer, info)
-//						codec?.releaseOutputBuffer(index, false)
-//					}
-//
-//					override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
-//						Log.e(TAG, "onInputBufferAvailable: ")
-//						val buffer = codec?.getInputBuffer(index)
-//						val byteCount = micRecord?.read(buffer, buffer!!.limit())
-//						val pstTs = calculateFrameTimestamp(byteCount!! shl 3)
-//						codec?.queueInputBuffer(index, 0, minBytes, calculateFrameTimestamp(pstTs.toInt()), MediaCodec.BUFFER_FLAG_KEY_FRAME)
-//					}
-//
-//					override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
-//						if (Looper.getMainLooper() == Looper.myLooper()) {
-//							Log.e(TAG, "MainThread")
-//						} else {
-//							Log.e(TAG, "SubThread")
-//						}
-//						Log.e(TAG, "onOutputFormatChanged: audio")
-//						audioTrackIndex = muxer.addTrack(format)
-//					}
-//
-//					override fun onError(codec: MediaCodec?, e: MediaCodec.CodecException?) {
-//						e?.printStackTrace()
-//					}
-//				})
-//				audioCodec?.configure(audioMediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
-//				audioCodec?.start()
-//				if (isMicRecording) {
-//					var minBytes = AudioRecord.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_IN_STEREO, AudioFormat.ENCODING_PCM_16BIT)
-//					if (minBytes <= 0) {
-//						Log.e(TAG, String.format(Locale.US, "Bad arguments: getMinBufferSize(%d, %d, %d)",
-//								sampleRate, audioChannelCount, AudioFormat.ENCODING_PCM_16BIT))
-//						return
-//					}
-//
-//					micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
-//							sampleRate,
-//							AudioFormat.CHANNEL_IN_STEREO,
-//							AudioFormat.ENCODING_PCM_16BIT,
-//							minBytes * 2)
-//
-//					micRecord?.let {
-//						if (it.state == AudioRecord.STATE_UNINITIALIZED) {
-//							Log.e(TAG, "bad arguments ${sampleRate}")
-//						}
-//					}
-//				}
-//				micRecord?.startRecording()
-
-			}
+	private fun resetVideoPts(buffer: MediaCodec.BufferInfo) {
+		if (videoPtsOffset == 0L) {
+			videoPtsOffset = buffer.presentationTimeUs
+			buffer.presentationTimeUs = 0
+		} else {
+			buffer.presentationTimeUs -= videoPtsOffset
 		}
 	}
 
 }
-
-

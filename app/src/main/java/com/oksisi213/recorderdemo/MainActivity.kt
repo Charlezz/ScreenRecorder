@@ -126,34 +126,13 @@ class MainActivity : AppCompatActivity() {
 
 	}
 
-	var recorder: ScreenRecorder2? = null
+	var recorder: ScreenRecorder? = null
 	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
 		super.onActivityResult(requestCode, resultCode, data)
 		if (requestCode == 0) {
 			if (resultCode == Activity.RESULT_OK) {
-//				recorder = ScreenRecorder(this, data!!)
-//						.setVideoConfig(VideoConfig())
-//						.setAudioConfig()
-//						.record()
-//						.setVideoMimeType(videoMimeTypeSpinner.selectedItem as String)
-//						.setResolution((resolutionSpinner.selectedItem as Size).width, (resolutionSpinner.selectedItem as Size).height)
-//						.setFrameRate(frameRateSpinner.selectedItem as Int)
-//						.setIFrameInterval(iFrameIntervalSpinner.selectedItem as Int)
-//						.setVideoBitrate(videoBitrateSpinner.selectedItem as Int)
-//						.setVideoCodec(videoEncoderSpinner.selectedItem as MediaCodecInfo)
-//						.setVideoProfile((videoProfileSpinner.selectedItem as VideoProfile).profile)
-//						.setVideoLevel((videoProfileSpinner.selectedItem as VideoProfile).level)
-//						.setMicRecording(true)
-//						.setAudioMimeType(audioMimeTypeSpinner.selectedItem as String)
-//						.setAudioCodec(audioCodecSpinner.selectedItem as MediaCodecInfo)
-//						.setAudioProfile((audioProfileSpinner.selectedItem as AudioProfile).profile)
-//						.setAudioSampleRate(sampleRateSpinner.selectedItem as Int)
-//						.setAudioBitrate(audioBitrateSpinner.selectedItem as Int)
-//						.setAudioChannel(CodecUtil.AudioChannel.STEREO)
-//						.record()
-
 				data?.let {
-					recorder = ScreenRecorder2(this, it)
+					recorder = ScreenRecorder(this, it)
 							.setVideoConfig(VideoConfig.getDefaultConfig())
 							.setAudioConfig(AudioConfig.getDefaultConfig())
 							.record()

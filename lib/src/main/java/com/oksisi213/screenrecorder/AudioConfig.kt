@@ -16,13 +16,22 @@ class AudioConfig {
 	val TAG = AudioConfig::class.java.simpleName
 
 	companion object {
-		fun getDefaultConfig() = AudioConfig(
-				codecName = CodecUtil.findAudioEncoderList(MediaFormat.MIMETYPE_AUDIO_AAC)[0].name,
-				mimeType = MediaFormat.MIMETYPE_AUDIO_AAC,
-				bitrate = 80000,
-				sampleRate = 44100,
-				channelCount = 1
-		)
+		fun getDefaultConfig(): AudioConfig {
+			val mimeType = MediaFormat.MIMETYPE_AUDIO_AAC
+			val mediaCodecInfo = CodecUtil.findAudioEncoderList(mimeType)[0]
+			val codecName = mediaCodecInfo.name
+			val bitrate = CodecUtil.getAudioBitrateRange(mediaCodecInfo, mimeType).let {
+				val preferred = 80000
+				return@let it.clamp(preferred)
+			}
+			val sampleRate = CodecUtil.getAudioSampleRates(mediaCodecInfo).let {
+				val preferred = 44100
+				var diff = Integer.MAX_VALUE
+				return@let it.lastOrNull { diff > Math.abs(preferred - it) } ?: preferred
+			}
+			val channelCount = 1
+			return AudioConfig(codecName, mimeType, bitrate, sampleRate, channelCount)
+		}
 	}
 
 	val codecName: String? get

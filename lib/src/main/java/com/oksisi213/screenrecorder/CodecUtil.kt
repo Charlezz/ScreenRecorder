@@ -3,6 +3,7 @@ package com.oksisi213.screenrecorder
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
+import android.util.Range
 import android.util.Size
 
 /**
@@ -62,9 +63,12 @@ object CodecUtil {
 		return bitrateList
 	}
 
-	fun getAudioSampleRates(mediaCodecInfo: MediaCodecInfo) {
-		mediaCodecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_AUDIO_AAC)
-	}
+	fun getAudioBitrateRange(mediaCodecInfo: MediaCodecInfo, mimeType: String): Range<Int> =
+			mediaCodecInfo.getCapabilitiesForType(mimeType).audioCapabilities.bitrateRange
+
+	fun getAudioSampleRates(mediaCodecInfo: MediaCodecInfo): ArrayList<Int> =
+			ArrayList(mediaCodecInfo.getCapabilitiesForType(MediaFormat.MIMETYPE_AUDIO_AAC)
+					.audioCapabilities.supportedSampleRates.toMutableList())
 
 	fun getAVCProfileName(profile: Int) =
 			when (profile) {
@@ -86,10 +90,8 @@ object CodecUtil {
 				MediaCodecInfo.CodecProfileLevel.AVCLevel4 -> "AVCLevel4"
 				MediaCodecInfo.CodecProfileLevel.AVCLevel21 -> "AVCLevel21"
 				MediaCodecInfo.CodecProfileLevel.AVCLevel22 -> "AVCLevel22"
-				MediaCodecInfo.CodecProfileLevel.AVCLevel3 -> "AVCLevel3"
 				MediaCodecInfo.CodecProfileLevel.AVCLevel31 -> "AVCLevel31"
 				MediaCodecInfo.CodecProfileLevel.AVCLevel32 -> "AVCLevel32"
-				MediaCodecInfo.CodecProfileLevel.AVCLevel4 -> "AVCLevel4"
 				MediaCodecInfo.CodecProfileLevel.AVCLevel41 -> "AVCLevel41"
 				MediaCodecInfo.CodecProfileLevel.AVCLevel42 -> "AVCLevel42"
 				MediaCodecInfo.CodecProfileLevel.AVCLevel5 -> "AVCLevel5"
@@ -115,9 +117,10 @@ object CodecUtil {
 			}
 
 	object VideoBitrate {
-		val HD by lazy { 20000 }
-		val SD_HIGH by lazy { 500 }
-		val SD_LOW by lazy { 56 }
+		//kbps
+		val HD by lazy { 20000 * 1000 }
+		val SD_HIGH by lazy { 500 * 1000 }
+		val SD_LOW by lazy { 56 * 1000 }
 	}
 
 	object Resolution {

@@ -25,8 +25,8 @@ class VideoConfig {
 
 	companion object {
 		fun getDefaultConfig() = VideoConfig(
-				width = CodecUtil.Resolution.HD.width,
-				height = CodecUtil.Resolution.HD.height,
+				width = CodecUtil.Resolution.HD.height,
+				height = CodecUtil.Resolution.HD.width,
 				bitrate = CodecUtil.VideoBitrate.HD,
 				frameRate = CodecUtil.FrameRate.FAST,
 				iFrameInterval = 1,
