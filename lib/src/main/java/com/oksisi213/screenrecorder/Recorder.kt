@@ -203,8 +203,11 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 						AudioFormat.CHANNEL_IN_MONO,
 						AudioFormat.ENCODING_PCM_16BIT,
 						minBytes * 1)
-				micRecord?.
 
+
+				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_STOPPED) {
+					Log.e(TAG, "Mic is used by other app")
+				}
 
 				if (micRecord == null) {
 					throw NullPointerException("MicRecorder is null")
@@ -215,6 +218,10 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 				}
 
 				micRecord?.startRecording()
+
+				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+					Log.e(TAG, "started to record but Mic is used by other app")
+				}
 				audioEncoder?.start()
 
 			}
@@ -302,8 +309,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 			resetAudioPts(bufferInfo)
 			Log.e(TAG, "audio pts:${bufferInfo.presentationTimeUs}")
 		}
-
-
 		muxer.writeSampleData(audioTrackIndex, audioEncoder?.getOutputBuffer(index), bufferInfo)
 		audioEncoder?.releaseOutputBuffer(index, false)
 		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
@@ -401,5 +406,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 			buffer.presentationTimeUs -= videoPtsOffset
 		}
 	}
+
 
 }
