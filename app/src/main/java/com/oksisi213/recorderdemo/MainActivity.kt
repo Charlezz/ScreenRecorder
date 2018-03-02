@@ -8,6 +8,8 @@ import android.content.pm.PackageManager
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Bundle
+import android.os.HandlerThread
+import android.os.Message
 import android.support.v4.app.ActivityCompat
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
@@ -19,6 +21,9 @@ import android.widget.ArrayAdapter
 import android.widget.TextView
 import com.oksisi213.screenrecorder.*
 import kotlinx.android.synthetic.main.activity_main.*
+import java.nio.ByteBuffer
+import java.util.*
+import java.util.concurrent.locks.ReentrantLock
 
 
 class MainActivity : AppCompatActivity() {
@@ -32,9 +37,72 @@ class MainActivity : AppCompatActivity() {
 	var PERMISSION_CODE_WRITE = 0
 	val PERMISSION_LIST = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO)
 
+	lateinit var pcmThread: HandlerThread
+	lateinit var pcmHandler: WeakRefHandler
+
+	lateinit var workerThread: HandlerThread
+	lateinit var workerHandler: WeakRefHandler
+
+	val lock: ReentrantLock = ReentrantLock()
+	val bufferPool = ByteBufferPool(5, 1024 * 4)
+
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.activity_main)
+
+		val bufferPool = ByteBufferPool(5, 4)
+
+		val pcmThread = HandlerThread("PCM")
+		val pcmHandler = WeakRefHandler(pcmThread.looper, object : WeakRefHandler.IMessageListener {
+			override fun handleMessage(message: Message) {
+				var count = 0
+				while (true) {
+					Thread.sleep(0)
+					val byteArray = ByteArray(Random().nextInt(4048) + 4048) { position ->
+						count++.let {
+							if (count == Int.MAX_VALUE) {
+								count = 0
+							}
+							it.toByte()
+						}
+					}
+					val byteBuffer = ByteBuffer.wrap(byteArray)
+					lock.lock()
+					bufferPool.insert(byteBuffer)
+					lock.unlock()
+				}
+			}
+		})
+
+
+		workerThread = HandlerThread("worker")
+		workerHandler = WeakRefHandler(workerThread.looper, object : WeakRefHandler.IMessageListener {
+			override fun handleMessage(message: Message) {
+				while (true) {
+					Thread.sleep(0)
+					lock.lock()
+					if(!bufferPool.empty()){
+						val buffer = ByteBuffer.allocate(1024*4)
+						val bufferCount:Int = bufferPool.read(buffer)
+					}
+					lock.unlock()
+
+
+//						inputBuffer.array().forEach {
+//							Log.e(TAG, "${it.toInt()}")
+//						}
+				}
+			}
+
+		})
+
+
+
+		pcmThread.start()
+		workerThread.start()
+
+		pcmHandler.sendEmptyMessage(0)
+
 
 
 
@@ -134,7 +202,7 @@ class MainActivity : AppCompatActivity() {
 				data?.let {
 					recorder = ScreenRecorder(this, it)
 							.setVideoConfig(VideoConfig.getDefaultConfig())
-							.setAudioConfig(AudioConfig.getDefaultConfig())
+							.setAudioConfig(null)
 							.record()
 				}
 
@@ -203,25 +271,25 @@ class MainActivity : AppCompatActivity() {
 	private fun initAudioProfiles() {
 		(audioCodecSpinner.selectedItem as MediaCodecInfo)
 				.getCapabilitiesForType(MediaFormat.MIMETYPE_AUDIO_AAC).let {
-			audioProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, ArrayList<AudioProfile>().apply {
-				it.profileLevels.forEach {
-					val name = CodecUtil.getAACProfileName(it.profile)
-					add(AudioProfile(name, it.profile))
-				}
-			})
+					audioProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, ArrayList<AudioProfile>().apply {
+						it.profileLevels.forEach {
+							val name = CodecUtil.getAACProfileName(it.profile)
+							add(AudioProfile(name, it.profile))
+						}
+					})
 
-		}
+				}
 	}
 
 	private fun initAudioSampleRates() {
 		(audioCodecSpinner.selectedItem as MediaCodecInfo)
 				.getCapabilitiesForType(MediaFormat.MIMETYPE_AUDIO_AAC).let {
-			sampleRateSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId,
-					ArrayList<Int>(it.audioCapabilities.supportedSampleRates.toMutableList().apply {
-						sortDescending()
-					})
-			)
-		}
+					sampleRateSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId,
+							ArrayList<Int>(it.audioCapabilities.supportedSampleRates.toMutableList().apply {
+								sortDescending()
+							})
+					)
+				}
 
 	}
 
