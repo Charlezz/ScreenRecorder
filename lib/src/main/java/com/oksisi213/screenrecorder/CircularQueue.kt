@@ -51,7 +51,8 @@ open class CircularQueue<T> {
 	fun first(): T {
 		return queueArray[this.front]
 	}
-	fun last():T{
+
+	fun last(): T {
 		return queueArray[this.rear]
 	}
 

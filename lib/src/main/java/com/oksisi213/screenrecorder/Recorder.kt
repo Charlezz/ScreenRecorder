@@ -34,7 +34,7 @@ abstract class Recorder<out T> {
 	}
 
 	protected var videoConfig: VideoConfig? = null
-	protected var audioConfig: AudioConfig? = null
+	public var audioConfig: AudioConfig? = null
 
 	protected var stateChangeListener: OnStateChangeListener? = null
 
@@ -90,7 +90,7 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 
 	private val pendingVideoOutputBuffer = LinkedList<Pair<Int, MediaCodec.BufferInfo>>()
 	private val pendingAudioOutputBuffer = LinkedList<Pair<Int, MediaCodec.BufferInfo>>()
-	private val pendingPCMQueue = CircularQueue<ByteBuffer>(5)
+	private var audioBufferPool: ByteBufferPool? = null
 
 	init {
 		//set default value
@@ -178,17 +178,16 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 
 	private fun setUpAudioEncoder() {
 		if (audioConfig != null) {
+			minBytes = AudioRecord.getMinBufferSize(
+					audioConfig!!.sampleRate,
+					if (audioConfig!!.channelCount == 1) {
+						AudioFormat.CHANNEL_IN_MONO
+					} else {
+						AudioFormat.CHANNEL_IN_STEREO
+					},
+					AudioFormat.ENCODING_PCM_16BIT
+			)
 			if (useMicrophone) {
-				minBytes = AudioRecord.getMinBufferSize(
-						audioConfig!!.sampleRate,
-						if (audioConfig!!.channelCount == 1) {
-							AudioFormat.CHANNEL_IN_MONO
-						} else {
-							AudioFormat.CHANNEL_IN_STEREO
-						},
-						AudioFormat.ENCODING_PCM_16BIT
-				)
-
 				if (minBytes <= 0) {
 					Log.e(TAG, String.format(Locale.US, "Bad arguments: getMinBufferSize(%d, %d, %d)",
 							audioConfig!!.sampleRate, audioConfig!!.channelCount, AudioFormat.ENCODING_PCM_16BIT))
@@ -219,6 +218,11 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
 					Log.e(TAG, "started to record but Mic is used by other app")
 				}
+			} else {
+				audioConfig?.let {
+					audioBufferPool = ByteBufferPool(5, minBytes)
+				}
+
 			}
 
 			audioEncoder = audioConfig?.createMediaCodec()
@@ -233,7 +237,7 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 				override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
 					codec?.let {
 						if (useMicrophone) {
-							queueMicToInputBuffer(codec, index)
+							queueMicInputBuffer(codec, index)
 						} else {
 							queuePCMToInputBuffer(codec, index)
 						}
@@ -257,22 +261,21 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 
 	private fun queuePCMToInputBuffer(codec: MediaCodec?, index: Int) {
 		val inputBuffer = codec?.getInputBuffer(index)
-
-
-//		while ({ pcmBuffer = pendingPCM.poll(); pcmBuffer }() != null) {
-//			val bufferCount = pcmBuffer?.count()
-//
-//			codec?.queueInputBuffer(
-//					index,
-//					0,
-//					pcmBuffer!!.size,
-//					calculateFrameTimestamp(bufferCount!! shl 3),
-//					MediaCodec.BUFFER_FLAG_KEY_FRAME
-//			)
-//		}
+		val buffer = audioBufferPool?.get()
+		buffer?.let {
+			if (it.hasRemaining()) {
+				inputBuffer?.put(audioBufferPool?.get())
+				codec?.queueInputBuffer(
+						index,
+						inputBuffer!!.position(),
+						inputBuffer.limit(),
+						calculateFrameTimestamp(inputBuffer.remaining() shl 3),
+						MediaCodec.BUFFER_FLAG_KEY_FRAME)
+			}
+		}
 	}
 
-	private fun queueMicToInputBuffer(codec: MediaCodec?, index: Int) {
+	private fun queueMicInputBuffer(codec: MediaCodec?, index: Int) {
 		val inputBuffer = codec?.getInputBuffer(index)
 		val bufferCount = micRecord?.read(inputBuffer, inputBuffer!!.limit())
 		codec?.queueInputBuffer(
@@ -281,10 +284,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 				inputBuffer.limit(),
 				calculateFrameTimestamp(bufferCount!! shl 3),
 				MediaCodec.BUFFER_FLAG_KEY_FRAME)
-	}
-
-	fun pushPCM(byteArray: ByteArray) {
-		pendingPCMQueue.insert(ByteBuffer.wrap(byteArray))
 	}
 
 
@@ -383,6 +382,7 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 	}
 
 	fun record(): ScreenRecorder {
+
 		handler.sendEmptyMessage(MSG_START)
 		return this
 	}
@@ -479,6 +479,10 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 		} else {
 			buffer.presentationTimeUs -= videoPtsOffset
 		}
+	}
+
+	fun writeAudioBuffer(byteArray: ByteArray) {
+		audioBufferPool?.put(byteArray)
 	}
 
 

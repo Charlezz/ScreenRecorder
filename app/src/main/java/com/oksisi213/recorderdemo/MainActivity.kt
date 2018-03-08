@@ -8,8 +8,6 @@ import android.content.pm.PackageManager
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.os.Bundle
-import android.os.HandlerThread
-import android.os.Message
 import android.support.v4.app.ActivityCompat
 import android.support.v7.app.AppCompatActivity
 import android.util.Log
@@ -21,90 +19,23 @@ import android.widget.ArrayAdapter
 import android.widget.TextView
 import com.oksisi213.screenrecorder.*
 import kotlinx.android.synthetic.main.activity_main.*
-import java.nio.ByteBuffer
 import java.util.*
-import java.util.concurrent.locks.ReentrantLock
 
 
 class MainActivity : AppCompatActivity() {
-
-
 	companion object {
 		val TAG = MainActivity::class.java.simpleName
+		const val AUDIO_RECORD_START = 0
+		const val AUDIO_RECORDING = 1
 	}
 
 	val spinnerItemId = android.R.layout.simple_list_item_1
 	var PERMISSION_CODE_WRITE = 0
 	val PERMISSION_LIST = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO)
 
-	lateinit var pcmThread: HandlerThread
-	lateinit var pcmHandler: WeakRefHandler
-
-	lateinit var workerThread: HandlerThread
-	lateinit var workerHandler: WeakRefHandler
-
-	val lock: ReentrantLock = ReentrantLock()
-	val bufferPool = ByteBufferPool(5, 1024 * 4)
-
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.activity_main)
-
-		val bufferPool = ByteBufferPool(5, 4)
-
-		val pcmThread = HandlerThread("PCM")
-		val pcmHandler = WeakRefHandler(pcmThread.looper, object : WeakRefHandler.IMessageListener {
-			override fun handleMessage(message: Message) {
-				var count = 0
-				while (true) {
-					Thread.sleep(0)
-					val byteArray = ByteArray(Random().nextInt(4048) + 4048) { position ->
-						count++.let {
-							if (count == Int.MAX_VALUE) {
-								count = 0
-							}
-							it.toByte()
-						}
-					}
-					val byteBuffer = ByteBuffer.wrap(byteArray)
-					lock.lock()
-					bufferPool.insert(byteBuffer)
-					lock.unlock()
-				}
-			}
-		})
-
-
-		workerThread = HandlerThread("worker")
-		workerHandler = WeakRefHandler(workerThread.looper, object : WeakRefHandler.IMessageListener {
-			override fun handleMessage(message: Message) {
-				while (true) {
-					Thread.sleep(0)
-					lock.lock()
-					if(!bufferPool.empty()){
-						val buffer = ByteBuffer.allocate(1024*4)
-						val bufferCount:Int = bufferPool.read(buffer)
-					}
-					lock.unlock()
-
-
-//						inputBuffer.array().forEach {
-//							Log.e(TAG, "${it.toInt()}")
-//						}
-				}
-			}
-
-		})
-
-
-
-		pcmThread.start()
-		workerThread.start()
-
-		pcmHandler.sendEmptyMessage(0)
-
-
-
 
 		PERMISSION_LIST.forEach {
 			Log.e(TAG, "onCreate: $it")
@@ -200,10 +131,14 @@ class MainActivity : AppCompatActivity() {
 		if (requestCode == 0) {
 			if (resultCode == Activity.RESULT_OK) {
 				data?.let {
+
+
 					recorder = ScreenRecorder(this, it)
 							.setVideoConfig(VideoConfig.getDefaultConfig())
-							.setAudioConfig(null)
+							.setAudioConfig(AudioConfig.getDefaultConfig())
+							.useMicrophone(false)
 							.record()
+
 				}
 
 
@@ -324,5 +259,71 @@ class MainActivity : AppCompatActivity() {
 		}
 
 	}
+
+//
+//	private val audioThread = HandlerThread("audio thread")
+//	private val audioHandler = WeakRefHandler(audioThread.looper, this)
+//	var micRecord: AudioRecord? = null
+//	override fun handleMessage(message: Message) {
+//		when (message.what) {
+//			AUDIO_RECORD_START -> {
+//
+//				val audioConfig = recorder?.audioConfig
+//				val minBytes = AudioRecord.getMinBufferSize(
+//						audioConfig!!.sampleRate,
+//						if (audioConfig!!.channelCount == 1) {
+//							AudioFormat.CHANNEL_IN_MONO
+//						} else {
+//							AudioFormat.CHANNEL_IN_STEREO
+//						},
+//						AudioFormat.ENCODING_PCM_16BIT
+//				)
+//
+//				if (minBytes <= 0) {
+//					Log.e(TAG, String.format(Locale.US, "Bad arguments: getMinBufferSize(%d, %d, %d)",
+//							audioConfig!!.sampleRate, audioConfig!!.channelCount, AudioFormat.ENCODING_PCM_16BIT))
+//					return
+//				}
+//
+//				micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
+//						audioConfig!!.sampleRate,
+//						AudioFormat.CHANNEL_IN_MONO,
+//						AudioFormat.ENCODING_PCM_16BIT,
+//						minBytes * 1)
+//
+//
+//				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_STOPPED) {
+//					Log.e(TAG, "Mic is used by other app")
+//				}
+//
+//				if (micRecord == null) {
+//					throw NullPointerException("MicRecorder is null")
+//				}
+//
+//				if (micRecord?.state == AudioRecord.STATE_UNINITIALIZED) {
+//					Log.e(TAG, "bad arguments")
+//				}
+//
+//				micRecord?.startRecording()
+//
+//				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
+//					Log.e(TAG, "started to record but Mic is used by other app")
+//				}
+//
+//				audioHandler.sendEmptyMessage(AUDIO_RECORDING)
+//			}
+//			AUDIO_RECORDING -> {
+//				val buffer = recorder!!.acquireAudioBuffer()
+//				micRecord?.read(buffer, buffer.limit())
+//				recorder?.releaseAudioBuffer(buffer)
+//
+//				Thread.sleep(0)
+//			}
+//
+//
+//		}
+//
+//	}
+
 
 }
