@@ -90,6 +90,8 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 
 	private val pendingVideoOutputBuffer = LinkedList<Pair<Int, MediaCodec.BufferInfo>>()
 	private val pendingAudioOutputBuffer = LinkedList<Pair<Int, MediaCodec.BufferInfo>>()
+
+	private val pendingAudioInputBuffer = LinkedList<Pair<Int, MediaCodec?>>()
 	private var audioBufferPool: ByteBufferPool? = null
 
 	init {
@@ -222,7 +224,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 				audioConfig?.let {
 					audioBufferPool = ByteBufferPool(5, minBytes)
 				}
-
 			}
 
 			audioEncoder = audioConfig?.createMediaCodec()
@@ -260,24 +261,33 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 	}
 
 	private fun queuePCMToInputBuffer(codec: MediaCodec?, index: Int) {
-		val inputBuffer = codec?.getInputBuffer(index)
-		val buffer = audioBufferPool?.get()
-		buffer?.let {
-			if (it.hasRemaining()) {
-				inputBuffer?.put(audioBufferPool?.get())
-				codec?.queueInputBuffer(
-						index,
-						inputBuffer!!.position(),
-						inputBuffer.limit(),
-						calculateFrameTimestamp(inputBuffer.remaining() shl 3),
-						MediaCodec.BUFFER_FLAG_KEY_FRAME)
+		synchronized(pendingAudioInputBuffer) {
+			val buffer = audioBufferPool?.get()
+			buffer?.let {
+				if (it.hasRemaining()) {
+					val inputBuffer = codec?.getInputBuffer(index)
+					inputBuffer?.put(buffer)
+					codec?.queueInputBuffer(
+							index,
+							0,
+							buffer.limit(),
+							calculateFrameTimestamp(buffer.limit() shl 3).also {
+								Log.e(TAG, "audio pts:$it")
+							},
+							MediaCodec.BUFFER_FLAG_KEY_FRAME)
+				} else {
+					pendingAudioInputBuffer.push(Pair(index, codec))
+				}
 			}
 		}
+
+
 	}
 
 	private fun queueMicInputBuffer(codec: MediaCodec?, index: Int) {
 		val inputBuffer = codec?.getInputBuffer(index)
 		val bufferCount = micRecord?.read(inputBuffer, inputBuffer!!.limit())
+		Log.e(TAG, "mic position=${inputBuffer!!.position()}  mic limit= ${inputBuffer.limit()}")
 		codec?.queueInputBuffer(
 				index,
 				inputBuffer!!.position(),
@@ -304,8 +314,11 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 			audioTrackIndex = muxer.addTrack(audioOutputFormat)
 		}
 
-		isMuxerStart = true
 		muxer.start()
+		synchronized(isMuxerStart) {
+			isMuxerStart = true
+		}
+
 
 		while (pendingAudioOutputBuffer.isEmpty() && pendingVideoOutputBuffer.isEmpty()) {
 			Log.e(TAG, "no pending data")
@@ -407,6 +420,9 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 	}
 
 	private fun release() {
+		synchronized(isMuxerStart) {
+			isMuxerStart = false
+		}
 		resetAudio()
 		resetVideo()
 
@@ -422,9 +438,10 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 		audioTrackIndex = INVALID_INDEX
 		videoTrackIndex = INVALID_INDEX
 
+
 		muxer.stop()
 		muxer.release()
-		isMuxerStart = false
+
 	}
 
 	fun stop() {
@@ -481,9 +498,31 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 		}
 	}
 
-	fun writeAudioBuffer(byteArray: ByteArray) {
-		audioBufferPool?.put(byteArray)
+	fun writeAudioBuffer(byteArray: ByteArray, size: Int) {
+		synchronized(isMuxerStart) {
+			if (isMuxerStart) {
+				synchronized(pendingAudioInputBuffer) {
+					if (pendingAudioInputBuffer.isNotEmpty()) {
+						Log.e(TAG, "write PCM to previous inputBuffer")
+						val pair = pendingAudioInputBuffer.poll()
+						val index = pair.first
+						val codec = pair.second
+						val inputBuffer = codec?.getInputBuffer(index)
+						inputBuffer?.put(byteArray)
+						codec?.queueInputBuffer(
+								index,
+								0,
+								size,
+								calculateFrameTimestamp(size shl 3).also {
+								},
+								MediaCodec.BUFFER_FLAG_KEY_FRAME)
+					} else {
+						Log.e(TAG, "put pcm into the pool")
+						audioBufferPool?.put(byteArray)
+					}
+				}
+			}
+		}
+
 	}
-
-
 }

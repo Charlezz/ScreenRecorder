@@ -30,7 +30,7 @@ open class ByteBufferPool constructor(count: Int, bufferSize: Int) {
 		reentrantLock.unlock()
 	}
 
-	open fun get(): ByteBuffer? {
+	fun get(): ByteBuffer? {
 		reentrantLock.lock()
 		return if (buffers.isNotEmpty()) {
 			buffers[0]
@@ -39,6 +39,8 @@ open class ByteBufferPool constructor(count: Int, bufferSize: Int) {
 		}
 		reentrantLock.unlock()
 	}
+
+
 }
 
 

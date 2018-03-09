@@ -5,8 +5,7 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.MediaCodecInfo
-import android.media.MediaFormat
+import android.media.*
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v7.app.AppCompatActivity
@@ -19,19 +18,20 @@ import android.widget.ArrayAdapter
 import android.widget.TextView
 import com.oksisi213.screenrecorder.*
 import kotlinx.android.synthetic.main.activity_main.*
+import java.nio.ByteBuffer
 import java.util.*
 
 
 class MainActivity : AppCompatActivity() {
 	companion object {
 		val TAG = MainActivity::class.java.simpleName
-		const val AUDIO_RECORD_START = 0
-		const val AUDIO_RECORDING = 1
 	}
 
 	val spinnerItemId = android.R.layout.simple_list_item_1
 	var PERMISSION_CODE_WRITE = 0
 	val PERMISSION_LIST = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO)
+
+	var isAudioFinished = false
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
@@ -104,6 +104,7 @@ class MainActivity : AppCompatActivity() {
 			if (isChecked) {
 				ScreenRecorder.requestCaptureIntent(this, 0)
 			} else {
+				isAudioFinished = true
 				recorder?.stop()
 			}
 		}
@@ -139,6 +140,45 @@ class MainActivity : AppCompatActivity() {
 							.useMicrophone(false)
 							.record()
 
+					recorder?.audioConfig?.let {
+
+						val t1 = Thread(Runnable {
+							Log.e(TAG, "Audio Thread start")
+							val minBytes = AudioRecord.getMinBufferSize(
+									it.sampleRate,
+									AudioFormat.CHANNEL_IN_MONO,
+									AudioFormat.ENCODING_PCM_16BIT)
+
+							Log.e(TAG, "generate AudioRecord")
+							val micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
+									it.sampleRate,
+									AudioFormat.CHANNEL_IN_MONO,
+									AudioFormat.ENCODING_PCM_16BIT,
+									minBytes)
+							micRecord.startRecording()
+
+							val buffer = ByteBuffer.allocateDirect(minBytes)
+//							val bufferArray = ByteArray(minBytes)
+
+							while (true) {
+//								buffer.clear()
+								Thread.sleep(10)
+								if (isAudioFinished) {
+									micRecord.stop()
+									micRecord.release()
+									break
+								}
+								micRecord.read(buffer, minBytes)
+
+								Log.e(TAG, "buffer position =${buffer.position()}")
+								Log.e(TAG, "buffer limit =${buffer.limit()}")
+								Log.e(TAG, "buffer size=${buffer.remaining()}")
+								recorder?.writeAudioBuffer(buffer.array(), buffer.limit())
+							}
+						})
+
+						t1.start()
+					}
 				}
 
 
@@ -259,71 +299,4 @@ class MainActivity : AppCompatActivity() {
 		}
 
 	}
-
-//
-//	private val audioThread = HandlerThread("audio thread")
-//	private val audioHandler = WeakRefHandler(audioThread.looper, this)
-//	var micRecord: AudioRecord? = null
-//	override fun handleMessage(message: Message) {
-//		when (message.what) {
-//			AUDIO_RECORD_START -> {
-//
-//				val audioConfig = recorder?.audioConfig
-//				val minBytes = AudioRecord.getMinBufferSize(
-//						audioConfig!!.sampleRate,
-//						if (audioConfig!!.channelCount == 1) {
-//							AudioFormat.CHANNEL_IN_MONO
-//						} else {
-//							AudioFormat.CHANNEL_IN_STEREO
-//						},
-//						AudioFormat.ENCODING_PCM_16BIT
-//				)
-//
-//				if (minBytes <= 0) {
-//					Log.e(TAG, String.format(Locale.US, "Bad arguments: getMinBufferSize(%d, %d, %d)",
-//							audioConfig!!.sampleRate, audioConfig!!.channelCount, AudioFormat.ENCODING_PCM_16BIT))
-//					return
-//				}
-//
-//				micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
-//						audioConfig!!.sampleRate,
-//						AudioFormat.CHANNEL_IN_MONO,
-//						AudioFormat.ENCODING_PCM_16BIT,
-//						minBytes * 1)
-//
-//
-//				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_STOPPED) {
-//					Log.e(TAG, "Mic is used by other app")
-//				}
-//
-//				if (micRecord == null) {
-//					throw NullPointerException("MicRecorder is null")
-//				}
-//
-//				if (micRecord?.state == AudioRecord.STATE_UNINITIALIZED) {
-//					Log.e(TAG, "bad arguments")
-//				}
-//
-//				micRecord?.startRecording()
-//
-//				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-//					Log.e(TAG, "started to record but Mic is used by other app")
-//				}
-//
-//				audioHandler.sendEmptyMessage(AUDIO_RECORDING)
-//			}
-//			AUDIO_RECORDING -> {
-//				val buffer = recorder!!.acquireAudioBuffer()
-//				micRecord?.read(buffer, buffer.limit())
-//				recorder?.releaseAudioBuffer(buffer)
-//
-//				Thread.sleep(0)
-//			}
-//
-//
-//		}
-//
-//	}
-
-
 }
