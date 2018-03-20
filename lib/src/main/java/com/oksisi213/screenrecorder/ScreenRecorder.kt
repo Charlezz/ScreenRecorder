@@ -16,62 +16,52 @@ import android.util.SparseLongArray
 import java.nio.ByteBuffer
 import java.text.SimpleDateFormat
 import java.util.*
+import java.util.concurrent.locks.ReentrantLock
 
 
 /**
  * Copyright 2017 Maxst, Inc. All Rights Reserved.
  * Created by charles on 2018. 2. 21..
  */
-abstract class Recorder<out T> {
-
-	private val dstPath by lazy {
-		val dateFormat = SimpleDateFormat("yyMMdd_HHmmss")
-		val date = dateFormat.format(Date())
-		Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS).absolutePath + "/record" + date
-	}
-	protected val muxer: MediaMuxer by lazy {
-		MediaMuxer(dstPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
-	}
-
-	protected var videoConfig: VideoConfig? = null
-	public var audioConfig: AudioConfig? = null
-
-	protected var stateChangeListener: OnStateChangeListener? = null
-
-	fun setVideoConfig(config: VideoConfig?): T {
-		this.videoConfig = config
-		return this as T
-	}
-
-	fun setAudioConfig(config: AudioConfig?): T {
-		this.audioConfig = config
-		return this as T
-	}
-
-	fun setOnStateChangeListener(stateChangeListener: OnStateChangeListener?): T {
-		this.stateChangeListener = stateChangeListener
-		return this as T
-	}
-
-	interface OnStateChangeListener {
-		fun onError(errorCode: ErrorCode, message: String)
-		fun onStateChanged(code: Int)
-	}
-}
 
 
-class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<ScreenRecorder>(), WeakRefHandler.IMessageListener {
-	val TAG = ScreenRecorder::class.java.simpleName
-
+class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandler.IMessageListener {
 	companion object {
+		private val TAG = ScreenRecorder::class.java.simpleName
 		fun requestCaptureIntent(activity: Activity, requestCode: Int) {
 			val manager = activity.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
 			activity.startActivityForResult(manager.createScreenCaptureIntent(), requestCode)
 		}
 	}
 
+	var dstPath: String = {
+		val dateFormat = SimpleDateFormat("yyMMdd_HHmmss")
+		val date = dateFormat.format(Date())
+		Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_MOVIES).absolutePath + "/record" + date
+	}()
+
+
+	private var muxer: MediaMuxer? = null
+
+	var videoConfig: VideoConfig? = null
+	var audioConfig: AudioConfig? = null
+
+	private var stateChangeListener: OnStateChangeListener? = null
+
+	fun setOnStateChangeListener(stateChangeListener: OnStateChangeListener?) {
+		this.stateChangeListener = stateChangeListener
+	}
+
+
+	interface OnStateChangeListener {
+		fun onError(errorCode: ErrorCode, message: String)
+		fun onStateChanged(state: State)
+	}
+
 	private val MSG_START = 0
 	private val MSG_STOP = 1
+	private val MSG_WRITE_AUDIO = 2
+
 	private val INVALID_INDEX = -1
 
 	private val mediaProjectionManager: MediaProjectionManager = context.getSystemService(Context.MEDIA_PROJECTION_SERVICE) as MediaProjectionManager
@@ -85,8 +75,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 
 	private var videoEncoder: MediaCodec? = null
 	private var audioEncoder: MediaCodec? = null
-	private var isMuxerStart = false
-	private var useMicrophone = false
 
 	private val pendingVideoOutputBuffer = LinkedList<Pair<Int, MediaCodec.BufferInfo>>()
 	private val pendingAudioOutputBuffer = LinkedList<Pair<Int, MediaCodec.BufferInfo>>()
@@ -94,59 +82,78 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 	private val pendingAudioInputBuffer = LinkedList<Pair<Int, MediaCodec?>>()
 	private var audioBufferPool: ByteBufferPool? = null
 
+	private var state: State = State.NONE
+	var usingMic = false
+
+
 	init {
-		//set default value
 		audioConfig = AudioConfig.getDefaultConfig()
-		videoConfig = VideoConfig.getDefaultConfig()
-		useMicrophone = true
+		videoConfig = VideoConfig.getDefaultConfig(context as Activity)
+		usingMic = true
 	}
 
 
-	val worker = HandlerThread(String.format("%s %s", TAG, "Worker")).apply {
+	private val worker = HandlerThread(String.format("%s %s", TAG, "Worker")).apply {
 		start()
 	}
-	val handler = WeakRefHandler(worker.looper, this)
+	private val handler = WeakRefHandler(worker.looper, this)
 
 	override fun handleMessage(message: Message) {
 		when (message.what) {
 			MSG_START -> {
+				setState(State.PREPARING)
 				setUpVideoEncoder()
 				setUpAudioEncoder()
+				setState(State.RECORDING)
 			}
 			MSG_STOP -> {
-				release()
+				setState(State.STOPPED)
+				stateChangeListener = null
+				releaseAudio()
+				releaseVideo()
+				releaseMuxer()
+			}
+
+			MSG_WRITE_AUDIO -> {
+				writePCMToPool(message)
 			}
 		}
 	}
 
-	fun useMicrophone(using: Boolean): ScreenRecorder {
-		useMicrophone = using
-		return this
-	}
-
 	private fun setUpVideoEncoder() {
+		if (videoConfig == null) {
+			stateChangeListener?.onError(ErrorCode.VIDEO_CONFIG_ERROR, "VideoConfig Must be initialized")
+			stop()
+			return
+		}
+
 		videoEncoder = videoConfig?.createMediaCodec()
+
+		if (videoEncoder == null) {
+			stateChangeListener?.onError(ErrorCode.VIDEO_ENCODER_ERROR, "Failed to create MediaCodec")
+		}
+
 		videoEncoder?.configure(videoConfig?.mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
 		videoEncoder?.setCallback(object : MediaCodec.Callback() {
 			override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
-				Log.i(TAG, "video onOutputBufferAvailable")
 				info?.let {
 					muxVideo(index, info)
 				}
 			}
 
 			override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
-				Log.e(TAG, "video onInputBufferAvailable")
+
 			}
 
 			override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
 				Log.e(TAG, "video onOutputFormatChanged")
 				videoOutputFormat = format
-				startMuxerIfReady()
+				startMuxingIfReady()
 			}
 
 			override fun onError(codec: MediaCodec?, e: MediaCodec.CodecException?) {
-				stateChangeListener?.onError(ErrorCode.VIDEO_ENCDOER_ERROR, e.toString())
+				stateChangeListener?.onError(ErrorCode.VIDEO_ENCODER_ERROR, e.toString())
+				stop()
 			}
 		})
 
@@ -154,7 +161,7 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 				TAG,
 				videoConfig!!.width,
 				videoConfig!!.height,
-				1,
+				videoConfig!!.densityDpi,
 				DisplayManager.VIRTUAL_DISPLAY_FLAG_PUBLIC,
 				videoEncoder?.createInputSurface(),
 				object : VirtualDisplay.Callback() {
@@ -189,218 +196,264 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 					},
 					AudioFormat.ENCODING_PCM_16BIT
 			)
-			if (useMicrophone) {
-				if (minBytes <= 0) {
-					Log.e(TAG, String.format(Locale.US, "Bad arguments: getMinBufferSize(%d, %d, %d)",
-							audioConfig!!.sampleRate, audioConfig!!.channelCount, AudioFormat.ENCODING_PCM_16BIT))
-					return
-				}
+			if (minBytes <= 0) {
+				stateChangeListener?.onError(ErrorCode.AUDIO_MIN_BUFFER_SIZE_ERROR, "Check audio sample_rate or channel count")
+				stop()
+				return
+			}
 
+			audioBufferPool = ByteBufferPool(5, minBytes)
+
+			if (usingMic) {
 				micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
 						audioConfig!!.sampleRate,
 						AudioFormat.CHANNEL_IN_MONO,
 						AudioFormat.ENCODING_PCM_16BIT,
-						minBytes * 1)
-
+						minBytes)
 
 				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_STOPPED) {
-					Log.e(TAG, "Mic is used by other app")
+					stateChangeListener?.onError(ErrorCode.MIC_IN_USE, "Check If Other app is already using mic")
+					stop()
+					return
 				}
 
 				if (micRecord == null) {
-					throw NullPointerException("MicRecorder is null")
+					stateChangeListener?.onError(ErrorCode.AUDIO_RECORD_ERROR, "Check audio sample_rate or channel count")
+					stop()
+					return
 				}
 
 				if (micRecord?.state == AudioRecord.STATE_UNINITIALIZED) {
-					Log.e(TAG, "bad arguments")
+					stateChangeListener?.onError(ErrorCode.AUDIO_RECORD_ERROR, "Check audio sample_rate or channel count")
+					stop()
+					return
 				}
-
 				micRecord?.startRecording()
 
 				if (micRecord?.recordingState != AudioRecord.RECORDSTATE_RECORDING) {
-					Log.e(TAG, "started to record but Mic is used by other app")
-				}
-			} else {
-				audioConfig?.let {
-					audioBufferPool = ByteBufferPool(5, minBytes)
+					stateChangeListener?.onError(ErrorCode.MIC_IN_USE, "Check If Other app is already using mic")
+					stop()
+					return
 				}
 			}
 
 			audioEncoder = audioConfig?.createMediaCodec()
+			if (audioEncoder == null) {
+				stateChangeListener?.onError(ErrorCode.AUDIO_ENCODER_ERROR, "Failed to create audio media codec")
+			}
 			audioEncoder?.configure(audioConfig?.mediaFormat, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE)
 			audioEncoder?.setCallback(object : MediaCodec.Callback() {
 				override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
 					info?.let {
+						Log.e(TAG, "onOutputBufferAvailable")
 						muxAudio(index, it)
 					}
 				}
 
 				override fun onInputBufferAvailable(codec: MediaCodec?, index: Int) {
 					codec?.let {
-						if (useMicrophone) {
-							queueMicInputBuffer(codec, index)
+						if (usingMic) {
+							queueMicToInputBuffer(codec, index)
 						} else {
 							queuePCMToInputBuffer(codec, index)
 						}
-
 					}
 				}
 
 				override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
 					Log.e(TAG, "audio onOutputFormatChanged")
 					audioOutputFormat = format
-					startMuxerIfReady()
+					startMuxingIfReady()
 				}
 
 				override fun onError(codec: MediaCodec?, e: MediaCodec.CodecException?) {
-					Log.e(TAG, "audio onError")
+					stateChangeListener?.onError(ErrorCode.AUDIO_ENCODER_ERROR, e.toString())
 				}
 			})
 			audioEncoder?.start()
 		}
 	}
 
+	val lock = ReentrantLock()
 	private fun queuePCMToInputBuffer(codec: MediaCodec?, index: Int) {
-		synchronized(pendingAudioInputBuffer) {
-			val buffer = audioBufferPool?.get()
-			buffer?.let {
-				if (it.hasRemaining()) {
-					val inputBuffer = codec?.getInputBuffer(index)
-					inputBuffer?.put(buffer)
-					codec?.queueInputBuffer(
-							index,
-							0,
-							buffer.limit(),
-							calculateFrameTimestamp(buffer.limit() shl 3).also {
-								Log.e(TAG, "audio pts:$it")
-							},
-							MediaCodec.BUFFER_FLAG_KEY_FRAME)
-				} else {
-					pendingAudioInputBuffer.push(Pair(index, codec))
-				}
+		Log.e(TAG, "queuePCMToInputBuffer")
+		lock.lock()
+		pendingAudioInputBuffer.push(Pair(index, codec))
+
+
+		while (pendingAudioInputBuffer.isNotEmpty()) {
+			var inputIndexWithbuffer: Pair<Int, MediaCodec?> = pendingAudioInputBuffer.pollLast()
+
+			val index = inputIndexWithbuffer.first
+			val codec = inputIndexWithbuffer.second
+			val inputBuffer = codec?.getInputBuffer(index)
+			val audioBuffer = audioBufferPool?.get()
+
+
+
+			audioBuffer?.let {
+				val position = it.position()
+				inputBuffer?.put(it.array(), 0, position)
+				codec?.queueInputBuffer(
+						index,
+						0,
+						position,
+						calculateFrameTimestamp(position shl 3),
+						MediaCodec.BUFFER_FLAG_KEY_FRAME)
+				audioBufferPool?.release(it)
+
+			}
+
+			if (audioBuffer == null) {
+				Log.e(TAG, "audio buffer is null")
+				pendingAudioInputBuffer.push(Pair(index, codec!!))
+				break
 			}
 		}
-
-
+		lock.unlock()
 	}
 
-	private fun queueMicInputBuffer(codec: MediaCodec?, index: Int) {
-		val inputBuffer = codec?.getInputBuffer(index)
-		val bufferCount = micRecord?.read(inputBuffer, inputBuffer!!.limit())
-		Log.e(TAG, "mic position=${inputBuffer!!.position()}  mic limit= ${inputBuffer.limit()}")
-		codec?.queueInputBuffer(
+
+	fun writePCMToPool(message: Message) {
+		lock.lock()
+		val audioBuffer = message.obj as ByteArray
+		val size = message.arg1
+
+
+
+		if (getState() == State.RECORDING) {
+			audioBufferPool?.put(audioBuffer, size)
+		}
+
+		if (pendingAudioInputBuffer.isNotEmpty()) {
+			val audioBufferWithIndex = pendingAudioInputBuffer.pollLast()
+			val index = audioBufferWithIndex.first
+			val codec = audioBufferWithIndex.second
+			val inputBuffer = codec?.getInputBuffer(index)
+			val audioBuffer = audioBufferPool!!.get()
+
+			audioBuffer?.let {
+				val position = it.position()
+				inputBuffer?.put(it.array(), 0, position)
+				codec?.queueInputBuffer(
+						index,
+						0,
+						position,
+						calculateFrameTimestamp(position shl 3),
+						MediaCodec.BUFFER_FLAG_KEY_FRAME)
+				audioBufferPool?.release(it)
+			}
+		} else {
+			Log.e(TAG, "pendingAudioInputBuffer is empty")
+		}
+		lock.unlock()
+	}
+
+	fun writeAudioBuffer(byteArray: ByteArray, size: Int) {
+		handler.obtainMessage(MSG_WRITE_AUDIO, size, -1, byteArray).sendToTarget()
+	}
+
+	private fun queueMicToInputBuffer(codec: MediaCodec, index: Int) {
+		val inputBuffer = codec.getInputBuffer(index)
+		val bufferCount = micRecord?.read(inputBuffer, inputBuffer.limit())
+		codec.queueInputBuffer(
 				index,
-				inputBuffer!!.position(),
+				inputBuffer.position(),
 				inputBuffer.limit(),
 				calculateFrameTimestamp(bufferCount!! shl 3),
 				MediaCodec.BUFFER_FLAG_KEY_FRAME)
 	}
 
 
-	fun startMuxerIfReady() {
-		Log.e(TAG, "startMuxerIfReady")
+	fun startMuxingIfReady() {
+		Log.e(TAG, "startMuxingIfReady")
 		if ((videoConfig != null && videoOutputFormat == null)) {
-			Log.e(TAG, "video encoder is not ready yet")
 			return
 		}
 		if (audioConfig != null && audioOutputFormat == null) {
-			Log.e(TAG, "audio encoder is not ready yet")
 			return
 		}
 
-		videoTrackIndex = muxer.addTrack(videoOutputFormat)
+		muxer = MediaMuxer(dstPath, MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4)
 
-		if (audioConfig != null) {
-			audioTrackIndex = muxer.addTrack(audioOutputFormat)
-		}
+		muxer?.let {
+			videoTrackIndex = it.addTrack(videoOutputFormat)
 
-		muxer.start()
-		synchronized(isMuxerStart) {
-			isMuxerStart = true
-		}
-
-
-		while (pendingAudioOutputBuffer.isEmpty() && pendingVideoOutputBuffer.isEmpty()) {
-			Log.e(TAG, "no pending data")
-			return
-		}
-
-		var pendingBuffer: Pair<Int, MediaCodec.BufferInfo>? = null
-
-		while ({ pendingBuffer = pendingVideoOutputBuffer.poll(); pendingBuffer }() != null) {
-			pendingBuffer?.let {
-				muxVideo(it.first, it.second)
+			if (audioConfig != null) {
+				audioTrackIndex = it.addTrack(audioOutputFormat)
 			}
-		}
 
-		if (audioConfig != null) {
-			pendingBuffer = null
-			while ({ pendingBuffer = pendingAudioOutputBuffer.poll(); pendingBuffer }() != null) {
+			muxer?.start()
+			setState(State.RECORDING)
+
+			while (pendingAudioOutputBuffer.isEmpty() && pendingVideoOutputBuffer.isEmpty()) {
+				return
+			}
+
+			var pendingBuffer: Pair<Int, MediaCodec.BufferInfo>? = null
+
+			while ({ pendingBuffer = pendingVideoOutputBuffer.pollLast(); pendingBuffer }() != null) {
 				pendingBuffer?.let {
-					muxAudio(it.first, it.second)
+					muxVideo(it.first, it.second)
 				}
 			}
+
+			if (audioConfig != null) {
+				pendingBuffer = null
+				while ({ pendingBuffer = pendingAudioOutputBuffer.pollLast(); pendingBuffer }() != null) {
+					pendingBuffer?.let {
+						muxAudio(it.first, it.second)
+					}
+				}
+			}
+		} ?: kotlin.run {
+			stateChangeListener?.onError(ErrorCode.MUXER_ERROR, "Media Muxer is null")
 		}
+
 	}
 
 	private fun muxAudio(index: Int, bufferInfo: MediaCodec.BufferInfo) {
-		Log.i(TAG, "mux audio:${bufferInfo.presentationTimeUs}")
-
-		if (audioTrackIndex == INVALID_INDEX || !isMuxerStart) {
-			Log.e(TAG, "audio Track is not ready yet")
+		if (audioTrackIndex == INVALID_INDEX || getState() != State.RECORDING) {
 			pendingAudioOutputBuffer.push(Pair(index, bufferInfo))
 			return
 		}
 
 		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
-			Log.e(TAG, "muxAudio:BUFFER_FLAG_CODEC_CONFIG")
 			bufferInfo.size = 0
 		} else {
 			resetAudioPts(bufferInfo)
-			Log.e(TAG, "audio pts:${bufferInfo.presentationTimeUs}")
 		}
-		muxer.writeSampleData(audioTrackIndex, audioEncoder?.getOutputBuffer(index), bufferInfo)
+		muxer?.writeSampleData(audioTrackIndex, audioEncoder?.getOutputBuffer(index), bufferInfo)
 		audioEncoder?.releaseOutputBuffer(index, false)
 		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-			Log.e(TAG, "Stop Audio encoder and muxer, since the buffer has been marked with EOS")
 			audioTrackIndex = INVALID_INDEX
 		}
 	}
 
 	private fun muxVideo(index: Int, bufferInfo: MediaCodec.BufferInfo) {
-		Log.i(TAG, "mux video:${bufferInfo.presentationTimeUs}")
-
-		if (videoTrackIndex == INVALID_INDEX || !isMuxerStart) {
-			Log.e(TAG, "video Track is not ready yet")
+		if (videoTrackIndex == INVALID_INDEX || getState() != State.RECORDING) {
 			pendingVideoOutputBuffer.push(Pair(index, bufferInfo))
 			return
 		}
 
-
 		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_CODEC_CONFIG != 0) {
-			Log.e(TAG, "muxAudio:BUFFER_FLAG_CODEC_CONFIG")
 			bufferInfo.size = 0
 		} else {
 			resetVideoPts(bufferInfo)
-			Log.e(TAG, "video pts:${bufferInfo.presentationTimeUs}")
 		}
-
-		muxer.writeSampleData(videoTrackIndex, videoEncoder?.getOutputBuffer(index), bufferInfo)
+		muxer?.writeSampleData(videoTrackIndex, videoEncoder?.getOutputBuffer(index), bufferInfo)
 		videoEncoder?.releaseOutputBuffer(index, false)
 
 		if (bufferInfo.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM != 0) {
-			Log.e(TAG, "Stop Video encoder and muxer, since the buffer has been marked with EOS")
 			videoTrackIndex = INVALID_INDEX
 		}
 	}
 
-	fun record(): ScreenRecorder {
-
+	fun record() {
 		handler.sendEmptyMessage(MSG_START)
-		return this
 	}
 
-	private fun resetAudio() {
+	private fun releaseAudio() {
 		audioEncoder?.stop()
 		audioEncoder?.release()
 		micRecord?.stop()
@@ -411,7 +464,7 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 		audioPtsOffset = 0
 	}
 
-	private fun resetVideo() {
+	private fun releaseVideo() {
 		videoEncoder?.stop()
 		videoEncoder?.release()
 		videoEncoder = null
@@ -419,29 +472,22 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 		videoPtsOffset = 0
 	}
 
-	private fun release() {
-		synchronized(isMuxerStart) {
-			isMuxerStart = false
+	private fun releaseMuxer() {
+		if (muxer != null) {
+			val eos = MediaCodec.BufferInfo()
+			val buffer = ByteBuffer.allocate(0)
+			eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+			if (audioTrackIndex != INVALID_INDEX) {
+				muxer?.writeSampleData(audioTrackIndex, buffer, eos)
+			}
+			muxer?.writeSampleData(videoTrackIndex, buffer, eos)
+
+			audioTrackIndex = INVALID_INDEX
+			videoTrackIndex = INVALID_INDEX
+
+			muxer?.stop()
+			muxer?.release()
 		}
-		resetAudio()
-		resetVideo()
-
-		val eos = MediaCodec.BufferInfo()
-		val buffer = ByteBuffer.allocate(0)
-		eos.set(0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-
-		if (audioTrackIndex != INVALID_INDEX) {
-			muxer.writeSampleData(audioTrackIndex, buffer, eos)
-		}
-		muxer.writeSampleData(videoTrackIndex, buffer, eos)
-
-		audioTrackIndex = INVALID_INDEX
-		videoTrackIndex = INVALID_INDEX
-
-
-		muxer.stop()
-		muxer.release()
-
 	}
 
 	fun stop() {
@@ -450,6 +496,9 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 
 	private val LAST_FRAME_ID = -1
 	private val framesUsCache = SparseLongArray(2)
+	private var videoPtsOffset: Long = 0
+	private var audioPtsOffset: Long = 0
+
 	private fun calculateFrameTimestamp(totalBits: Int): Long {
 		val samples = totalBits shr 4
 		var frameUs = framesUsCache.get(samples, -1)
@@ -467,20 +516,15 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 		} else {
 			lastFrameUs
 		}
-		Log.i(TAG, "count samples pts: $currentUs, time pts: $timeUs, samples: $samples")
-		// maybe too late to acquire sample data
 		if (timeUs - currentUs >= frameUs shl 1) {
-			// reset
 			currentUs = timeUs
 		}
 		framesUsCache.put(LAST_FRAME_ID, currentUs + frameUs)
 		return currentUs
 	}
 
-	private var videoPtsOffset: Long = 0
-	private var audioPtsOffset: Long = 0
-
 	private fun resetAudioPts(buffer: MediaCodec.BufferInfo) {
+//		Log.e(TAG, "audioPtsOffset = ${audioPtsOffset} , buffer.presentationTimeUS=${buffer.presentationTimeUs}")
 		if (audioPtsOffset == 0L) {
 			audioPtsOffset = buffer.presentationTimeUs
 			buffer.presentationTimeUs = 0
@@ -498,31 +542,14 @@ class ScreenRecorder constructor(context: Context, data: Intent) : Recorder<Scre
 		}
 	}
 
-	fun writeAudioBuffer(byteArray: ByteArray, size: Int) {
-		synchronized(isMuxerStart) {
-			if (isMuxerStart) {
-				synchronized(pendingAudioInputBuffer) {
-					if (pendingAudioInputBuffer.isNotEmpty()) {
-						Log.e(TAG, "write PCM to previous inputBuffer")
-						val pair = pendingAudioInputBuffer.poll()
-						val index = pair.first
-						val codec = pair.second
-						val inputBuffer = codec?.getInputBuffer(index)
-						inputBuffer?.put(byteArray)
-						codec?.queueInputBuffer(
-								index,
-								0,
-								size,
-								calculateFrameTimestamp(size shl 3).also {
-								},
-								MediaCodec.BUFFER_FLAG_KEY_FRAME)
-					} else {
-						Log.e(TAG, "put pcm into the pool")
-						audioBufferPool?.put(byteArray)
-					}
-				}
-			}
-		}
+	@Synchronized
+	private fun setState(state: State) {
+		this.state = state
+		stateChangeListener?.onStateChanged(state)
+	}
 
+	@Synchronized
+	fun getState(): State {
+		return state
 	}
 }

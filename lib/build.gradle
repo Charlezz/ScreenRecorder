@@ -26,3 +26,14 @@ dependencies {
 repositories {
     mavenCentral()
 }
+
+
+task copyAAR(type: Copy) {
+    print "copyAAR 시작"
+    dependsOn 'assembleRelease'
+    from('build/outputs/aar')
+    into('../../Vivar/Platform/VivarAndroid/VivarFactory/libs')
+    include(project.name + '-release.aar')
+
+}
+

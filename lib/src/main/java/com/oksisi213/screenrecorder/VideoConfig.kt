@@ -1,9 +1,11 @@
 package com.oksisi213.screenrecorder
 
+import android.app.Activity
 import android.media.MediaCodec
 import android.media.MediaCodecInfo
 import android.media.MediaFormat
 import android.text.TextUtils
+import android.util.DisplayMetrics
 import java.io.IOException
 
 /**
@@ -15,30 +17,37 @@ class VideoConfig {
 
 	val width: Int get
 	val height: Int get
-	private val bitrate: Int
-	private val frameRate: Int
-	private val iFrameInterval: Int
-	private val codecName: String?
-	private val mimeType: String
+	val bitrate: Int
+	val frameRate: Int
+	val iFrameInterval: Int
+	val codecName: String?
+	val mimeType: String
+	val densityDpi: Int
 	val mediaFormat: MediaFormat
 		get
 
 	companion object {
-		fun getDefaultConfig() = VideoConfig(
-				width = CodecUtil.Resolution.HD.height,
-				height = CodecUtil.Resolution.HD.width,
-				bitrate = CodecUtil.VideoBitrate.HD,
-				frameRate = CodecUtil.FrameRate.FAST,
-				iFrameInterval = 1,
-				codecName = null,
-				mimeType = MediaFormat.MIMETYPE_VIDEO_AVC
-		)
+		fun getDefaultConfig(activity: Activity) = {
+			var dm = DisplayMetrics()
+			activity.windowManager.defaultDisplay.getRealMetrics(dm)
+			VideoConfig(
+					width = dm.widthPixels,
+					height = dm.heightPixels,
+					densityDpi = dm.densityDpi,
+					bitrate = CodecUtil.VideoBitrate.HD,
+					frameRate = CodecUtil.FrameRate.FAST,
+					iFrameInterval = 1,
+					codecName = null,
+					mimeType = MediaFormat.MIMETYPE_VIDEO_AVC)
+		}()
+
 
 	}
 
 	constructor(
 			width: Int,
 			height: Int,
+			densityDpi: Int,
 			bitrate: Int,
 			frameRate: Int,
 			iFrameInterval: Int,
@@ -47,6 +56,7 @@ class VideoConfig {
 	) {
 		this.width = width
 		this.height = height
+		this.densityDpi = densityDpi
 		this.bitrate = bitrate
 		this.frameRate = frameRate
 		this.iFrameInterval = iFrameInterval

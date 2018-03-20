@@ -1,1 +1,1 @@
-include ':app', ':lib', ':StreamTest', ':java', ':ServiceTest'
+include ':app', ':lib'

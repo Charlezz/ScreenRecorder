@@ -3,9 +3,9 @@ package com.oksisi213.screenrecorder
 import android.media.MediaCodec
 import android.media.MediaFormat
 import android.text.TextUtils
-import android.util.Log
 import java.io.IOException
 import java.util.*
+
 
 /**
  * Copyright 2017 Maxst, Inc. All Rights Reserved.
@@ -13,9 +13,9 @@ import java.util.*
  */
 
 class AudioConfig {
-	val TAG = AudioConfig::class.java.simpleName
 
 	companion object {
+		val TAG = AudioConfig::class.java.simpleName
 		fun getDefaultConfig(): AudioConfig {
 			val mimeType = MediaFormat.MIMETYPE_AUDIO_AAC
 			val mediaCodecInfo = CodecUtil.findAudioEncoderList(mimeType)[0]
@@ -80,7 +80,6 @@ class AudioConfig {
 				if (!TextUtils.isEmpty(codecName)) {
 					MediaCodec.createByCodecName(codecName)
 				} else {
-					Log.e(TAG, "No codec name, will create encorder by type")
 					throw IOException("No codec name, will create encorder by type")
 				}
 			} catch (e: IOException) {

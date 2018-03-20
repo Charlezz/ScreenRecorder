@@ -5,7 +5,8 @@ import android.app.Activity
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.media.*
+import android.media.MediaCodecInfo
+import android.media.MediaFormat
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v7.app.AppCompatActivity
@@ -18,7 +19,6 @@ import android.widget.ArrayAdapter
 import android.widget.TextView
 import com.oksisi213.screenrecorder.*
 import kotlinx.android.synthetic.main.activity_main.*
-import java.nio.ByteBuffer
 import java.util.*
 
 
@@ -133,52 +133,51 @@ class MainActivity : AppCompatActivity() {
 			if (resultCode == Activity.RESULT_OK) {
 				data?.let {
 
-
 					recorder = ScreenRecorder(this, it)
-							.setVideoConfig(VideoConfig.getDefaultConfig())
-							.setAudioConfig(AudioConfig.getDefaultConfig())
-							.useMicrophone(false)
-							.record()
+					recorder?.videoConfig = VideoConfig.getDefaultConfig(MainActivity@ this)
+					recorder?.audioConfig = AudioConfig.getDefaultConfig()
+					recorder?.usingMic = true
 
-					recorder?.audioConfig?.let {
-
-						val t1 = Thread(Runnable {
-							Log.e(TAG, "Audio Thread start")
-							val minBytes = AudioRecord.getMinBufferSize(
-									it.sampleRate,
-									AudioFormat.CHANNEL_IN_MONO,
-									AudioFormat.ENCODING_PCM_16BIT)
-
-							Log.e(TAG, "generate AudioRecord")
-							val micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
-									it.sampleRate,
-									AudioFormat.CHANNEL_IN_MONO,
-									AudioFormat.ENCODING_PCM_16BIT,
-									minBytes)
-							micRecord.startRecording()
-
-							val buffer = ByteBuffer.allocateDirect(minBytes)
-//							val bufferArray = ByteArray(minBytes)
-
-							while (true) {
-//								buffer.clear()
-								Thread.sleep(10)
-								if (isAudioFinished) {
-									micRecord.stop()
-									micRecord.release()
-									break
-								}
-								micRecord.read(buffer, minBytes)
-
-								Log.e(TAG, "buffer position =${buffer.position()}")
-								Log.e(TAG, "buffer limit =${buffer.limit()}")
-								Log.e(TAG, "buffer size=${buffer.remaining()}")
-								recorder?.writeAudioBuffer(buffer.array(), buffer.limit())
-							}
-						})
-
-						t1.start()
-					}
+					recorder?.record()
+//					recorder?.audioConfig?.let {
+//
+//						val t1 = Thread(Runnable {
+//							Log.e(TAG, "Audio Thread start")
+//							val minBytes = AudioRecord.getMinBufferSize(
+//									it.sampleRate,
+//									AudioFormat.CHANNEL_IN_MONO,
+//									AudioFormat.ENCODING_PCM_16BIT)
+//
+//							Log.e(TAG, "generate AudioRecord")
+//							val micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
+//									it.sampleRate,
+//									AudioFormat.CHANNEL_IN_MONO,
+//									AudioFormat.ENCODING_PCM_16BIT,
+//									minBytes)
+//							micRecord.startRecording()
+//
+//							val buffer = ByteBuffer.allocateDirect(minBytes)
+////							val bufferArray = ByteArray(minBytes)
+//
+//							while (true) {
+////								buffer.clear()
+//								Thread.sleep(10)
+//								if (isAudioFinished) {
+//									micRecord.stop()
+//									micRecord.release()
+//									break
+//								}
+//								micRecord.read(buffer, minBytes)
+//
+//								Log.e(TAG, "buffer position =${buffer.position()}")
+//								Log.e(TAG, "buffer limit =${buffer.limit()}")
+//								Log.e(TAG, "buffer size=${buffer.remaining()}")
+//								recorder?.writeAudioBuffer(buffer.array(), buffer.limit())
+//							}
+//						})
+//
+//						t1.start()
+//					}
 				}
 
 
@@ -198,8 +197,6 @@ class MainActivity : AppCompatActivity() {
 				initVideoBitrates()
 			}
 		}
-
-
 	}
 
 	private fun initVideoBitrates() {

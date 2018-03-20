@@ -1,6 +1,7 @@
 package com.oksisi213.screenrecorder
 
 import java.nio.ByteBuffer
+import java.util.*
 import java.util.concurrent.locks.ReentrantLock
 
 /**
@@ -8,39 +9,54 @@ import java.util.concurrent.locks.ReentrantLock
  * Created by charles on 2018. 3. 6..
  */
 open class ByteBufferPool constructor(count: Int, bufferSize: Int) {
-	val TAG = ByteBufferPool::class.java.simpleName
-	private val buffers = ArrayList<ByteBuffer>()
 
-	private val reentrantLock = ReentrantLock()
+	val TAG = ByteBufferPool::class.java.simpleName
+
+	private val emptyBuffers = LinkedList<ByteBuffer>()
+	private val buffers = LinkedList<ByteBuffer>()
+
+	private val emptyBufLock = ReentrantLock()
+	private val bufLock = ReentrantLock()
+
 
 	init {
 		for (i in 0 until count) {
-			buffers.add(ByteBuffer.allocate(bufferSize))
+			emptyBuffers.push(ByteBuffer.allocate(bufferSize))
 		}
 	}
 
-	fun put(byteArray: ByteArray) {
-		reentrantLock.lock()
-		if (buffers.isNotEmpty()) {
-			val buffer = buffers[buffers.size - 1]
+	fun put(byteArray: ByteArray, length: Int) {
+		emptyBufLock.lock()
+		if (emptyBuffers.isNotEmpty()) {
+			val buffer = emptyBuffers.pollLast()
+			emptyBufLock.unlock()
 			buffer.clear()
-			buffer.put(byteArray)
-			buffers.add(0, buffer)
+			buffer.put(byteArray, 0, length)
+			bufLock.lock()
+			buffers.push(buffer)
+			bufLock.unlock()
+		} else {
+			emptyBufLock.unlock()
 		}
-		reentrantLock.unlock()
 	}
 
 	fun get(): ByteBuffer? {
-		reentrantLock.lock()
+		bufLock.lock()
 		return if (buffers.isNotEmpty()) {
-			buffers[0]
+			val buffer = buffers.pollLast()
+			bufLock.unlock()
+			buffer
 		} else {
+			bufLock.unlock()
 			null
 		}
-		reentrantLock.unlock()
 	}
 
-
+	fun release(buffer: ByteBuffer) {
+		emptyBufLock.lock()
+		emptyBuffers.push(buffer)
+		emptyBufLock.unlock()
+	}
 }
 
 

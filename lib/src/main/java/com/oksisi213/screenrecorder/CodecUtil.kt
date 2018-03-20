@@ -118,7 +118,7 @@ object CodecUtil {
 
 	object VideoBitrate {
 		//kbps
-		val HD by lazy { 20000 * 1000 }
+		val HD by lazy { 2000 * 1000 }
 		val SD_HIGH by lazy { 500 * 1000 }
 		val SD_LOW by lazy { 56 * 1000 }
 	}
