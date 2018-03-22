@@ -10,6 +10,7 @@ import android.media.MediaFormat
 import android.os.Bundle
 import android.support.v4.app.ActivityCompat
 import android.support.v7.app.AppCompatActivity
+import android.util.DisplayMetrics
 import android.util.Log
 import android.util.Size
 import android.view.View
@@ -32,10 +33,12 @@ class MainActivity : AppCompatActivity() {
 	val PERMISSION_LIST = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO)
 
 	var isAudioFinished = false
+	val dm = DisplayMetrics()
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.activity_main)
+		windowManager.defaultDisplay.getRealMetrics(dm)
 
 		PERMISSION_LIST.forEach {
 			Log.e(TAG, "onCreate: $it")
@@ -79,6 +82,7 @@ class MainActivity : AppCompatActivity() {
 
 
 		resolutionSpinner.adapter = ObjectArrayAdapter(this, spinnerItemId, ArrayList<Size>().apply {
+			add(Size(dm.widthPixels, dm.heightPixels))
 			add(CodecUtil.Resolution.HD)
 			add(CodecUtil.Resolution.SD_HIGH)
 			add(CodecUtil.Resolution.SD_LOW)
@@ -89,6 +93,7 @@ class MainActivity : AppCompatActivity() {
 			add(MediaFormat.MIMETYPE_AUDIO_AC3)
 			add(MediaFormat.MIMETYPE_AUDIO_MPEG)
 		})
+
 		audioMimeTypeSpinner.onItemSelectedListener = object : OnItemSelectedAdapter() {
 			override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
 				initAudioEndcoder()
@@ -96,8 +101,8 @@ class MainActivity : AppCompatActivity() {
 		}
 
 		audioChannelSpinner.adapter = ObjectArrayAdapter(this, spinnerItemId, ArrayList<Int>().apply {
-			add(CodecUtil.AudioChannel.STEREO)
 			add(CodecUtil.AudioChannel.MONO)
+			add(CodecUtil.AudioChannel.STEREO)
 		})
 
 		record.setOnCheckedChangeListener { _, isChecked ->
@@ -132,55 +137,27 @@ class MainActivity : AppCompatActivity() {
 		if (requestCode == 0) {
 			if (resultCode == Activity.RESULT_OK) {
 				data?.let {
-
 					recorder = ScreenRecorder(this, it)
-					recorder?.videoConfig = VideoConfig.getDefaultConfig(MainActivity@ this)
-					recorder?.audioConfig = AudioConfig.getDefaultConfig()
+
+					val size = resolutionSpinner.selectedItem as Size
+					val density = dm.densityDpi
+					val bitRate = videoBitrateSpinner.selectedItem as Int
+					val frameRate = frameRateSpinner.selectedItem as Int
+					val interval = iFrameIntervalSpinner.selectedItem as Int
+					val codecName = (videoEncoderSpinner.selectedItem as MediaCodecInfo).name
+					val videoMimeType = videoMimeTypeSpinner.selectedItem as String
+					recorder?.videoConfig = VideoConfig(size.width, size.height, density, bitRate, frameRate, interval, codecName, videoMimeType)
+
+					val audioCodecName = (audioCodecSpinner.selectedItem as MediaCodecInfo).name
+					val audioMimeType = audioMimeTypeSpinner.selectedItem as String
+					val audioBitrate = audioBitrateSpinner.selectedItem as Int
+					val sampleRate = sampleRateSpinner.selectedItem as Int
+					val channelCount = audioChannelSpinner.selectedItem as Int
+					recorder?.audioConfig = AudioConfig(audioCodecName, audioMimeType, audioBitrate, sampleRate, channelCount)
+
 					recorder?.usingMic = true
-
 					recorder?.record()
-//					recorder?.audioConfig?.let {
-//
-//						val t1 = Thread(Runnable {
-//							Log.e(TAG, "Audio Thread start")
-//							val minBytes = AudioRecord.getMinBufferSize(
-//									it.sampleRate,
-//									AudioFormat.CHANNEL_IN_MONO,
-//									AudioFormat.ENCODING_PCM_16BIT)
-//
-//							Log.e(TAG, "generate AudioRecord")
-//							val micRecord = AudioRecord(MediaRecorder.AudioSource.MIC,
-//									it.sampleRate,
-//									AudioFormat.CHANNEL_IN_MONO,
-//									AudioFormat.ENCODING_PCM_16BIT,
-//									minBytes)
-//							micRecord.startRecording()
-//
-//							val buffer = ByteBuffer.allocateDirect(minBytes)
-////							val bufferArray = ByteArray(minBytes)
-//
-//							while (true) {
-////								buffer.clear()
-//								Thread.sleep(10)
-//								if (isAudioFinished) {
-//									micRecord.stop()
-//									micRecord.release()
-//									break
-//								}
-//								micRecord.read(buffer, minBytes)
-//
-//								Log.e(TAG, "buffer position =${buffer.position()}")
-//								Log.e(TAG, "buffer limit =${buffer.limit()}")
-//								Log.e(TAG, "buffer size=${buffer.remaining()}")
-//								recorder?.writeAudioBuffer(buffer.array(), buffer.limit())
-//							}
-//						})
-//
-//						t1.start()
-//					}
 				}
-
-
 			} else {
 				record.isChecked = false
 			}
