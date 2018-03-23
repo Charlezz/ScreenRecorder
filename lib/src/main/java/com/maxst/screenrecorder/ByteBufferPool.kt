@@ -1,4 +1,4 @@
-package com.oksisi213.screenrecorder
+package com.maxst.screenrecorder
 
 import java.nio.ByteBuffer
 import java.util.*
@@ -6,7 +6,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 /**
  * Copyright 2017 Maxst, Inc. All Rights Reserved.
- * Created by charles on 2018. 3. 6..
+ * Created by Charles on 2018. 3. 6..
  */
 open class ByteBufferPool constructor(count: Int, bufferSize: Int) {
 

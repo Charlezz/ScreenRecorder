@@ -1,4 +1,4 @@
-package com.oksisi213.recorderdemo
+package com.maxst.recorderdemo
 
 import android.Manifest
 import android.app.Activity
@@ -18,38 +18,34 @@ import android.view.ViewGroup
 import android.widget.AdapterView
 import android.widget.ArrayAdapter
 import android.widget.TextView
-import com.oksisi213.screenrecorder.*
+import com.maxst.screenrecorder.*
 import kotlinx.android.synthetic.main.activity_main.*
-import java.util.*
 
 
 class MainActivity : AppCompatActivity() {
 	companion object {
-		val TAG = MainActivity::class.java.simpleName
+		val TAG: String = MainActivity::class.java.simpleName
+		const val PERMISSION_CODE_WRITE = 0
 	}
 
-	val spinnerItemId = android.R.layout.simple_list_item_1
-	var PERMISSION_CODE_WRITE = 0
-	val PERMISSION_LIST = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO)
-
-	var isAudioFinished = false
-	val dm = DisplayMetrics()
+	private val permissionList = arrayOf(Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.RECORD_AUDIO)
+	private val dm = DisplayMetrics()
+	private var recorder: ScreenRecorder? = null
 
 	override fun onCreate(savedInstanceState: Bundle?) {
 		super.onCreate(savedInstanceState)
 		setContentView(R.layout.activity_main)
 		windowManager.defaultDisplay.getRealMetrics(dm)
 
-		PERMISSION_LIST.forEach {
-			Log.e(TAG, "onCreate: $it")
+		permissionList.forEach {
 			if (ActivityCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED) {
-				ActivityCompat.requestPermissions(this, PERMISSION_LIST, PERMISSION_CODE_WRITE)
+				ActivityCompat.requestPermissions(this, permissionList, PERMISSION_CODE_WRITE)
 			}
 			return@forEach
 		}
 
 
-		videoMimeTypeSpinner.adapter = ArrayAdapter<String>(this, spinnerItemId, ArrayList<String>().apply {
+		videoMimeTypeSpinner.adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, ArrayList<String>().apply {
 			add(MediaFormat.MIMETYPE_VIDEO_AVC)
 			add(MediaFormat.MIMETYPE_VIDEO_H263)
 			add(MediaFormat.MIMETYPE_VIDEO_MPEG4)
@@ -65,30 +61,30 @@ class MainActivity : AppCompatActivity() {
 
 		}
 
-		frameRateSpinner.adapter = ObjectArrayAdapter(this, spinnerItemId, ArrayList<Int>().apply {
+		frameRateSpinner.adapter = ObjectArrayAdapter(this, android.R.layout.simple_list_item_1, ArrayList<Int>().apply {
 			add(CodecUtil.FrameRate.FAST)
 			add(CodecUtil.FrameRate.SLOW)
 		})
 
-		iFrameIntervalSpinner.adapter = ObjectArrayAdapter(this, spinnerItemId, ArrayList<Int>().apply {
+		iFrameIntervalSpinner.adapter = ObjectArrayAdapter(this, android.R.layout.simple_list_item_1, ArrayList<Int>().apply {
 			add(1)
 		})
 
 
-		orientationSpinner.adapter = ArrayAdapter<String>(this, spinnerItemId, ArrayList<String>().apply {
+		orientationSpinner.adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, ArrayList<String>().apply {
 			add(CodecUtil.Orientation.PORTRAIT)
 			add(CodecUtil.Orientation.LANDSCAPE)
 		})
 
 
-		resolutionSpinner.adapter = ObjectArrayAdapter(this, spinnerItemId, ArrayList<Size>().apply {
+		resolutionSpinner.adapter = ObjectArrayAdapter(this, android.R.layout.simple_list_item_1, ArrayList<Size>().apply {
 			add(Size(dm.widthPixels, dm.heightPixels))
 			add(CodecUtil.Resolution.HD)
 			add(CodecUtil.Resolution.SD_HIGH)
 			add(CodecUtil.Resolution.SD_LOW)
 		})
 
-		audioMimeTypeSpinner.adapter = ArrayAdapter<String>(this, spinnerItemId, ArrayList<String>().apply {
+		audioMimeTypeSpinner.adapter = ArrayAdapter<String>(this, android.R.layout.simple_list_item_1, ArrayList<String>().apply {
 			add(MediaFormat.MIMETYPE_AUDIO_AAC)
 			add(MediaFormat.MIMETYPE_AUDIO_AC3)
 			add(MediaFormat.MIMETYPE_AUDIO_MPEG)
@@ -100,7 +96,7 @@ class MainActivity : AppCompatActivity() {
 			}
 		}
 
-		audioChannelSpinner.adapter = ObjectArrayAdapter(this, spinnerItemId, ArrayList<Int>().apply {
+		audioChannelSpinner.adapter = ObjectArrayAdapter(this, android.R.layout.simple_list_item_1, ArrayList<Int>().apply {
 			add(CodecUtil.AudioChannel.MONO)
 			add(CodecUtil.AudioChannel.STEREO)
 		})
@@ -109,7 +105,6 @@ class MainActivity : AppCompatActivity() {
 			if (isChecked) {
 				ScreenRecorder.requestCaptureIntent(this, 0)
 			} else {
-				isAudioFinished = true
 				recorder?.stop()
 			}
 		}
@@ -121,7 +116,7 @@ class MainActivity : AppCompatActivity() {
 			PERMISSION_CODE_WRITE -> {
 				grantResults.forEach {
 					if (it == PackageManager.PERMISSION_GRANTED) {
-						Log.e(TAG, "${PERMISSION_LIST[it]} : Permissions have been granted")
+						Log.e(TAG, "${permissionList[it]} : Permissions have been granted")
 					} else {
 						finish()
 					}
@@ -131,9 +126,9 @@ class MainActivity : AppCompatActivity() {
 
 	}
 
-	var recorder: ScreenRecorder? = null
 	override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
 		super.onActivityResult(requestCode, resultCode, data)
+		Log.e(TAG, "")
 		if (requestCode == 0) {
 			if (resultCode == Activity.RESULT_OK) {
 				data?.let {
@@ -165,7 +160,7 @@ class MainActivity : AppCompatActivity() {
 	}
 
 	private fun initVideoCodecs() {
-		videoEncoderSpinner.adapter = MediaCodecArrayAdapter(this, spinnerItemId,
+		videoEncoderSpinner.adapter = MediaCodecArrayAdapter(this, android.R.layout.simple_list_item_1,
 				ArrayList(CodecUtil.findVideoEncoderList(videoMimeTypeSpinner.selectedItem as String)))
 
 		videoEncoderSpinner.onItemSelectedListener = object : OnItemSelectedAdapter() {
@@ -177,7 +172,7 @@ class MainActivity : AppCompatActivity() {
 	}
 
 	private fun initVideoBitrates() {
-		videoBitrateSpinner.adapter = ArrayAdapter<Int>(this, spinnerItemId, ArrayList<Int>().apply {
+		videoBitrateSpinner.adapter = ArrayAdapter<Int>(this, android.R.layout.simple_list_item_1, ArrayList<Int>().apply {
 			add(CodecUtil.VideoBitrate.HD)
 			add(CodecUtil.VideoBitrate.SD_HIGH)
 			add(CodecUtil.VideoBitrate.SD_LOW)
@@ -186,7 +181,7 @@ class MainActivity : AppCompatActivity() {
 
 	private fun initVideoProfiles() {
 		(videoEncoderSpinner.selectedItem as MediaCodecInfo).let {
-			videoProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, ArrayList<VideoProfile>().apply {
+			videoProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, ArrayList<VideoProfile>().apply {
 				try {
 					it.getCapabilitiesForType(videoMimeTypeSpinner.selectedItem as String).profileLevels.forEach {
 						val name = "${CodecUtil.getAVCProfileName(it.profile)} / ${CodecUtil.getAVCProfileLevel(it.level)}"
@@ -202,7 +197,7 @@ class MainActivity : AppCompatActivity() {
 
 
 	private fun initAudioEndcoder() {
-		audioCodecSpinner.adapter = MediaCodecArrayAdapter(this@MainActivity, spinnerItemId,
+		audioCodecSpinner.adapter = MediaCodecArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1,
 				ArrayList(CodecUtil.findAudioEncoderList(audioMimeTypeSpinner.selectedItem as String)))
 
 		audioCodecSpinner.onItemSelectedListener = object : AdapterView.OnItemSelectedListener {
@@ -212,7 +207,7 @@ class MainActivity : AppCompatActivity() {
 			override fun onItemSelected(parent: AdapterView<*>?, view: View?, position: Int, id: Long) {
 				initAudioProfiles()
 				initAudioSampleRates()
-				initAudioBitrates()
+				initAudioBitRates()
 			}
 		}
 	}
@@ -220,7 +215,7 @@ class MainActivity : AppCompatActivity() {
 	private fun initAudioProfiles() {
 		(audioCodecSpinner.selectedItem as MediaCodecInfo)
 				.getCapabilitiesForType(MediaFormat.MIMETYPE_AUDIO_AAC).let {
-					audioProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, ArrayList<AudioProfile>().apply {
+					audioProfileSpinner.adapter = ObjectArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, ArrayList<AudioProfile>().apply {
 						it.profileLevels.forEach {
 							val name = CodecUtil.getAACProfileName(it.profile)
 							add(AudioProfile(name, it.profile))
@@ -233,7 +228,7 @@ class MainActivity : AppCompatActivity() {
 	private fun initAudioSampleRates() {
 		(audioCodecSpinner.selectedItem as MediaCodecInfo)
 				.getCapabilitiesForType(MediaFormat.MIMETYPE_AUDIO_AAC).let {
-					sampleRateSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId,
+					sampleRateSpinner.adapter = ObjectArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1,
 							ArrayList<Int>(it.audioCapabilities.supportedSampleRates.toMutableList().apply {
 								sortDescending()
 							})
@@ -242,12 +237,12 @@ class MainActivity : AppCompatActivity() {
 
 	}
 
-	private fun initAudioBitrates() {
+	private fun initAudioBitRates() {
 		CodecUtil.getAudioBitrates(
 				audioCodecSpinner.selectedItem as MediaCodecInfo
 				, audioMimeTypeSpinner.selectedItem as String
 		).let {
-			audioBitrateSpinner.adapter = ObjectArrayAdapter(this@MainActivity, spinnerItemId, it)
+			audioBitrateSpinner.adapter = ObjectArrayAdapter(this@MainActivity, android.R.layout.simple_list_item_1, it)
 		}
 	}
 

@@ -1,4 +1,4 @@
-package com.oksisi213.screenrecorder
+package com.maxst.screenrecorder
 
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList

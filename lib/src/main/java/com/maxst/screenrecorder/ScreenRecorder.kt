@@ -1,4 +1,4 @@
-package com.oksisi213.screenrecorder
+package com.maxst.screenrecorder
 
 import android.app.Activity
 import android.content.Context
@@ -21,7 +21,7 @@ import java.util.concurrent.locks.ReentrantLock
 
 /**
  * Copyright 2017 Maxst, Inc. All Rights Reserved.
- * Created by charles on 2018. 2. 21..
+ * Created by Charles on 2018. 2. 21..
  */
 
 

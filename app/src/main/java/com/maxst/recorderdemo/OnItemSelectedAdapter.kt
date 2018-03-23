@@ -1,4 +1,4 @@
-package com.oksisi213.recorderdemo
+package com.maxst.recorderdemo
 
 import android.view.View
 import android.widget.AdapterView

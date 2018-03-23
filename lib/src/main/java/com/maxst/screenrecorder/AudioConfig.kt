@@ -1,4 +1,4 @@
-package com.oksisi213.screenrecorder
+package com.maxst.screenrecorder
 
 import android.media.MediaCodec
 import android.media.MediaFormat
@@ -9,7 +9,7 @@ import java.util.*
 
 /**
  * Copyright 2017 Maxst, Inc. All Rights Reserved.
- * Created by charles on 2018. 2. 21..
+ * Created by Charles on 2018. 2. 21..
  */
 
 class AudioConfig {

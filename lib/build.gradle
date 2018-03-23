@@ -2,11 +2,10 @@ apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
 
 android {
-    compileSdkVersion 26
-    buildToolsVersion "26.0.3"
+    compileSdkVersion 27
     defaultConfig {
         minSdkVersion 21
-        targetSdkVersion 26
+        targetSdkVersion 27
         versionCode 1
         versionName "1.0"
     }
@@ -29,11 +28,10 @@ repositories {
 
 
 task copyAAR(type: Copy) {
-    print "copyAAR 시작"
+    print "copyAAR"
     dependsOn 'assembleRelease'
     from('build/outputs/aar')
     into('../../Vivar/Platform/VivarAndroid/VivarFactory/libs')
     include(project.name + '-release.aar')
-
 }
 

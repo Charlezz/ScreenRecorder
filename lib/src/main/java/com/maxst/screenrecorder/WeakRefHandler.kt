@@ -1,4 +1,4 @@
-package com.oksisi213.screenrecorder
+package com.maxst.screenrecorder
 
 import android.os.Handler
 import android.os.Looper
@@ -7,7 +7,7 @@ import java.lang.ref.WeakReference
 
 /**
  * Copyright 2017 Maxst, Inc. All Rights Reserved.
- * Created by charles on 2018. 2. 20..
+ * Created by Charles on 2018. 2. 20..
  */
 class WeakRefHandler : Handler {
 
