@@ -1,1 +1,2 @@
-<manifest package="com.maxst.screenrecorder" />
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.maxst.screenrecorder" />

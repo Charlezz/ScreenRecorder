@@ -167,17 +167,14 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 				object : VirtualDisplay.Callback() {
 					override fun onResumed() {
 						super.onResumed()
-						Log.e(TAG, "virtual display onResumed")
 					}
 
 					override fun onPaused() {
 						super.onPaused()
-						Log.e(TAG, "virtual display onPaused")
 					}
 
 					override fun onStopped() {
 						super.onStopped()
-						Log.e(TAG, "virtual display onStopped")
 					}
 				},
 				null
@@ -245,7 +242,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 			audioEncoder?.setCallback(object : MediaCodec.Callback() {
 				override fun onOutputBufferAvailable(codec: MediaCodec?, index: Int, info: MediaCodec.BufferInfo?) {
 					info?.let {
-						Log.e(TAG, "onOutputBufferAvailable")
 						muxAudio(index, it)
 					}
 				}
@@ -261,7 +257,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 				}
 
 				override fun onOutputFormatChanged(codec: MediaCodec?, format: MediaFormat?) {
-					Log.e(TAG, "audio onOutputFormatChanged")
 					audioOutputFormat = format
 					startMuxingIfReady()
 				}
@@ -276,7 +271,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 
 	val lock = ReentrantLock()
 	private fun queuePCMToInputBuffer(codec: MediaCodec?, index: Int) {
-		Log.e(TAG, "queuePCMToInputBuffer")
 		lock.lock()
 		pendingAudioInputBuffer.push(Pair(index, codec))
 
@@ -284,9 +278,9 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 		while (pendingAudioInputBuffer.isNotEmpty()) {
 			var inputIndexWithbuffer: Pair<Int, MediaCodec?> = pendingAudioInputBuffer.pollLast()
 
-			val index = inputIndexWithbuffer.first
-			val codec = inputIndexWithbuffer.second
-			val inputBuffer = codec?.getInputBuffer(index)
+			val pendingIndex = inputIndexWithbuffer.first
+			val pendingCodec = inputIndexWithbuffer.second
+			val inputBuffer = codec?.getInputBuffer(pendingIndex)
 			val audioBuffer = audioBufferPool?.get()
 
 
@@ -294,8 +288,8 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 			audioBuffer?.let {
 				val position = it.position()
 				inputBuffer?.put(it.array(), 0, position)
-				codec?.queueInputBuffer(
-						index,
+				pendingCodec?.queueInputBuffer(
+						pendingIndex,
 						0,
 						position,
 						calculateFrameTimestamp(position shl 3),
@@ -305,8 +299,7 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 			}
 
 			if (audioBuffer == null) {
-				Log.e(TAG, "audio buffer is null")
-				pendingAudioInputBuffer.push(Pair(index, codec!!))
+				pendingAudioInputBuffer.push(Pair(pendingIndex, pendingCodec!!))
 				break
 			}
 		}
@@ -319,8 +312,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 		val audioBuffer = message.obj as ByteArray
 		val size = message.arg1
 
-
-
 		if (getState() == State.RECORDING) {
 			audioBufferPool?.put(audioBuffer, size)
 		}
@@ -330,9 +321,9 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 			val index = audioBufferWithIndex.first
 			val codec = audioBufferWithIndex.second
 			val inputBuffer = codec?.getInputBuffer(index)
-			val audioBuffer = audioBufferPool!!.get()
+			val pendingBuffer = audioBufferPool!!.get()
 
-			audioBuffer?.let {
+			pendingBuffer?.let {
 				val position = it.position()
 				inputBuffer?.put(it.array(), 0, position)
 				codec?.queueInputBuffer(
@@ -343,8 +334,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 						MediaCodec.BUFFER_FLAG_KEY_FRAME)
 				audioBufferPool?.release(it)
 			}
-		} else {
-			Log.e(TAG, "pendingAudioInputBuffer is empty")
 		}
 		lock.unlock()
 	}
@@ -366,7 +355,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 
 
 	fun startMuxingIfReady() {
-		Log.e(TAG, "startMuxingIfReady")
 		if ((videoConfig != null && videoOutputFormat == null)) {
 			return
 		}
@@ -524,7 +512,6 @@ class ScreenRecorder constructor(context: Context, data: Intent) : WeakRefHandle
 	}
 
 	private fun resetAudioPts(buffer: MediaCodec.BufferInfo) {
-//		Log.e(TAG, "audioPtsOffset = ${audioPtsOffset} , buffer.presentationTimeUS=${buffer.presentationTimeUs}")
 		if (audioPtsOffset == 0L) {
 			audioPtsOffset = buffer.presentationTimeUs
 			buffer.presentationTimeUs = 0
