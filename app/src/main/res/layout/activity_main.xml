@@ -1,0 +1,307 @@
+<?xml version="1.0" encoding="utf-8"?>
+<android.support.constraint.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent">
+
+    <ScrollView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent">
+
+        <android.support.constraint.ConstraintLayout
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content">
+
+            <TextView
+                android:id="@+id/tv_video"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_margin="5dp"
+                android:text="Video"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toTopOf="parent" />
+
+            <TextView
+                android:id="@+id/tv_video_mime_type"
+                android:layout_width="100dp"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="15dp"
+                android:text="Mime type"
+                app:layout_constraintBottom_toBottomOf="@id/videoMimeTypeSpinner"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintTop_toTopOf="@id/videoMimeTypeSpinner" />
+
+            <Spinner
+                android:id="@+id/videoMimeTypeSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toRightOf="@id/tv_video_mime_type"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/tv_video" />
+
+            <TextView
+                android:id="@+id/tv_video_encoder"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginLeft="15dp"
+                android:text="Encoder"
+                app:layout_constraintBottom_toBottomOf="@id/videoEncoderSpinner"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintTop_toTopOf="@id/videoEncoderSpinner" />
+
+            <Spinner
+                android:id="@+id/videoEncoderSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoMimeTypeSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoMimeTypeSpinner"
+                app:layout_constraintTop_toBottomOf="@id/videoMimeTypeSpinner" />
+
+
+            <TextView
+                android:id="@+id/tv_resolution"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Resolution"
+                app:layout_constraintBottom_toBottomOf="@id/resolutionSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_video_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_video_mime_type"
+                app:layout_constraintTop_toTopOf="@id/resolutionSpinner" />
+
+
+            <Spinner
+                android:id="@+id/resolutionSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/videoEncoderSpinner" />
+
+
+            <TextView
+                android:id="@+id/tv_video_bitrate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Bitrate"
+                app:layout_constraintBottom_toBottomOf="@id/videoBitrateSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_video_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_video_mime_type"
+                app:layout_constraintTop_toTopOf="@id/videoBitrateSpinner" />
+
+            <Spinner
+                android:id="@+id/videoBitrateSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/resolutionSpinner" />
+
+            <TextView
+                android:id="@+id/tv_frame_rate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Frame rate"
+                app:layout_constraintBottom_toBottomOf="@id/frameRateSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_video_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_video_mime_type"
+                app:layout_constraintTop_toTopOf="@id/frameRateSpinner" />
+
+            <Spinner
+                android:id="@+id/frameRateSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/videoBitrateSpinner" />
+
+
+            <TextView
+                android:id="@+id/tv_i_frame_interval"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Interval"
+                app:layout_constraintBottom_toBottomOf="@id/iFrameIntervalSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_video_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_video_mime_type"
+                app:layout_constraintTop_toTopOf="@id/iFrameIntervalSpinner" />
+
+            <Spinner
+                android:id="@+id/iFrameIntervalSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/frameRateSpinner" />
+
+
+            <TextView
+                android:id="@+id/tv_video_profile"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Profile"
+                app:layout_constraintBottom_toBottomOf="@id/videoProfileSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_video_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_video_mime_type"
+                app:layout_constraintTop_toTopOf="@id/videoProfileSpinner" />
+
+            <Spinner
+                android:id="@+id/videoProfileSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/iFrameIntervalSpinner" />
+
+            <TextView
+                android:id="@+id/tv_orientation"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Orientation"
+                app:layout_constraintBottom_toBottomOf="@id/orientationSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_video_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_video_mime_type"
+                app:layout_constraintTop_toTopOf="@id/orientationSpinner" />
+
+            <Spinner
+                android:id="@+id/orientationSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/videoProfileSpinner" />
+
+
+            <TextView
+                android:id="@+id/tv_audio"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:text="Audio"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/orientationSpinner" />
+
+            <TextView
+                android:id="@+id/tv_audio_mime_type"
+                android:layout_width="100dp"
+                android:layout_height="wrap_content"
+                android:text="Mime type"
+                app:layout_constraintBottom_toBottomOf="@id/audioMimeTypeSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_video_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_video_mime_type"
+                app:layout_constraintTop_toTopOf="@id/audioMimeTypeSpinner" />
+
+            <Spinner
+                android:id="@+id/audioMimeTypeSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoMimeTypeSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoMimeTypeSpinner"
+                app:layout_constraintTop_toBottomOf="@id/tv_audio" />
+
+
+            <TextView
+                android:id="@+id/tv_audio_encoder"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Encoder"
+                app:layout_constraintBottom_toBottomOf="@id/audioCodecSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_audio_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_audio_mime_type"
+                app:layout_constraintTop_toTopOf="@id/audioCodecSpinner" />
+
+            <Spinner
+                android:id="@+id/audioCodecSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/audioMimeTypeSpinner" />
+
+            <TextView
+                android:id="@+id/tv_audio_channel"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Channel"
+                app:layout_constraintBottom_toBottomOf="@id/audioChannelSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_audio_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_audio_mime_type"
+                app:layout_constraintTop_toTopOf="@id/audioChannelSpinner" />
+
+            <Spinner
+                android:id="@+id/audioChannelSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/audioCodecSpinner" />
+
+            <TextView
+                android:id="@+id/tv_sample_rate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Sample Rate"
+                app:layout_constraintBottom_toBottomOf="@id/sampleRateSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_audio_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_audio_mime_type"
+                app:layout_constraintTop_toTopOf="@id/sampleRateSpinner" />
+
+            <Spinner
+                android:id="@+id/sampleRateSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/audioChannelSpinner" />
+
+            <TextView
+                android:id="@+id/tv_audio_bitrate"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Bitrate"
+                app:layout_constraintBottom_toBottomOf="@id/audioBitrateSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_audio_mime_type"
+                app:layout_constraintRight_toRightOf="@id/tv_audio_mime_type"
+                app:layout_constraintTop_toTopOf="@id/audioBitrateSpinner" />
+
+            <Spinner
+                android:id="@+id/audioBitrateSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/sampleRateSpinner" />
+
+
+            <TextView
+                android:id="@+id/tv_audio_profile"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:text="Profile"
+                app:layout_constraintBottom_toBottomOf="@id/audioProfileSpinner"
+                app:layout_constraintLeft_toLeftOf="@id/tv_video_encoder"
+                app:layout_constraintRight_toRightOf="@id/tv_video_encoder"
+                app:layout_constraintTop_toTopOf="@id/audioProfileSpinner" />
+
+            <Spinner
+                android:id="@+id/audioProfileSpinner"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                app:layout_constraintLeft_toLeftOf="@id/videoEncoderSpinner"
+                app:layout_constraintRight_toRightOf="@id/videoEncoderSpinner"
+                app:layout_constraintTop_toBottomOf="@id/audioBitrateSpinner" />
+
+            <Switch
+                android:id="@+id/record"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="50dp"
+                android:text="record"
+                app:layout_constraintLeft_toLeftOf="parent"
+                app:layout_constraintRight_toRightOf="parent"
+                app:layout_constraintTop_toBottomOf="@id/audioProfileSpinner" />
+        </android.support.constraint.ConstraintLayout>
+    </ScrollView>
+
+
+</android.support.constraint.ConstraintLayout>
