@@ -1,5 +1,7 @@
 apply plugin: 'com.android.library'
 apply plugin: 'kotlin-android'
+apply plugin: 'com.novoda.bintray-release'
+
 
 android {
     compileSdkVersion 27
@@ -20,7 +22,7 @@ android {
 }
 
 dependencies {
-    compile "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
+    implementation "org.jetbrains.kotlin:kotlin-stdlib-jdk7:$kotlin_version"
 }
 repositories {
     mavenCentral()
@@ -33,5 +35,18 @@ task copyAAR(type: Copy) {
     from('build/outputs/aar')
     into('../../Vivar/Platform/VivarAndroid/VivarFactory/libs')
     include(project.name + '-release.aar')
+}
+
+tasks.withType(Javadoc).all {
+    enabled = false
+}
+
+publish {
+    userOrg = 'charlezz'
+    groupId = 'com.maxst'
+    artifactId = 'screenrecorder'
+    publishVersion = '1.0.0'
+    desc = 'Easy to record a video'
+    website = 'https://github.com/Charlezz/ScreenRecorder'
 }
 
